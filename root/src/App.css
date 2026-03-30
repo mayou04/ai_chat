@@ -1,3 +1,4 @@
+
 body {
   background: #f7f7f7;
   font-family: 'Comic Sans MS', 'Comic Sans', 'Chalkboard SE', 'Comic Neue', cursive, sans-serif;
@@ -15,6 +16,7 @@ body {
   display: flex;
   flex-direction: column;
   min-height: 600px;
+  height: 80vh;
   overflow: hidden;
 }
 
@@ -63,13 +65,15 @@ body {
 }
 
 .doodly-chat {
-  flex: 1;
+  flex: 1 1 auto;
   padding: 32px 16px 16px 16px;
   display: flex;
   flex-direction: column;
   gap: 18px;
   background: repeating-linear-gradient(135deg, #f7f7f7, #f7f7f7 20px, #ededed 20px, #ededed 40px);
+  overflow-y: auto;
 }
+
 
 .doodly-bubble {
   display: flex;
@@ -88,21 +92,25 @@ body {
   min-width: 80px;
   word-break: break-word;
 }
-.doodly-bubble.prompter {
+.doodly-bubble.me {
+  align-self: flex-end;
+  border-style: solid;
+  background: #ededed;
+  flex-direction: row-reverse;
+}
+.doodly-bubble.partner {
   align-self: flex-start;
   border-style: dashed;
   background: #f7f7f7;
 }
-.doodly-bubble.ai {
-  align-self: flex-end;
-  border-style: solid;
-  background: #ededed;
-}
 .doodly-avatar {
   font-size: 1.7rem;
-  margin-right: 4px;
+  margin: 0 4px 0 0;
   margin-bottom: -4px;
   filter: grayscale(0.2);
+}
+.doodly-bubble.me .doodly-avatar {
+  margin: 0 0 0 4px;
 }
 .doodly-text {
   font-family: inherit;
@@ -115,6 +123,17 @@ body {
   border-top: 2px dashed #bbb;
   padding: 18px 0 14px 0;
   text-align: center;
+  flex-shrink: 0;
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+}
+.doodly-input {
+  width: 60%;
+  max-width: 260px;
+  margin-right: 8px;
 }
 .doodly-input-placeholder {
   display: inline-block;
