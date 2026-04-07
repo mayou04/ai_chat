@@ -8,40 +8,25 @@ const io = new Server(server, {
   cors: { origin: '*' }
 });
 
-// Pairing logic
-let waitingHuman = null;
-let waitingAI = null;
+// Generic pairing logic
+let waitingSocket = null;
 const pairs = new Map(); // socket.id -> partner's socket.id
 
 io.on('connection', (socket) => {
   console.log('A user connected:', socket.id);
 
-  socket.on('choose role', (role) => {
-    socket.data.role = role;
-    if (role === 'Human') {
-      if (waitingAI) {
-        // Pair with waiting AI
-        pairs.set(socket.id, waitingAI.id);
-        pairs.set(waitingAI.id, socket.id);
-        socket.emit('paired', { partner: 'AI' });
-        waitingAI.emit('paired', { partner: 'Human' });
-        waitingAI = null;
-      } else {
-        waitingHuman = socket;
-        socket.emit('waiting');
-      }
-    } else if (role === 'AI') {
-      if (waitingHuman) {
-        // Pair with waiting Human
-        pairs.set(socket.id, waitingHuman.id);
-        pairs.set(waitingHuman.id, socket.id);
-        socket.emit('paired', { partner: 'Human' });
-        waitingHuman.emit('paired', { partner: 'AI' });
-        waitingHuman = null;
-      } else {
-        waitingAI = socket;
-        socket.emit('waiting');
-      }
+  // New generic join event
+  socket.on('join chat', () => {
+    if (waitingSocket && waitingSocket.id !== socket.id) {
+      // Pair with waiting user
+      pairs.set(socket.id, waitingSocket.id);
+      pairs.set(waitingSocket.id, socket.id);
+      socket.emit('paired');
+      waitingSocket.emit('paired');
+      waitingSocket = null;
+    } else {
+      waitingSocket = socket;
+      socket.emit('waiting');
     }
   });
 
@@ -56,8 +41,7 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => {
     console.log('User disconnected:', socket.id);
     // Remove from waiting
-    if (waitingHuman && waitingHuman.id === socket.id) waitingHuman = null;
-    if (waitingAI && waitingAI.id === socket.id) waitingAI = null;
+    if (waitingSocket && waitingSocket.id === socket.id) waitingSocket = null;
     // Remove pair
     const partnerId = pairs.get(socket.id);
     if (partnerId && io.sockets.sockets.get(partnerId)) {

@@ -6,8 +6,12 @@ const socket: Socket = io("http://localhost:3001");
 type Message = { sender: string; text: string };
 
 function App() {
-  const [turnCount, setTurnCount] = useState(0);
-  const [role, setRole] = useState<"AI" | "Human" | null>(null);
+  // Track how many messages this client has sent
+  const [myMsgCount, setMyMsgCount] = useState(0);
+  // Track how many messages partner has sent
+  const [partnerMsgCount, setPartnerMsgCount] = useState(0);
+  // Role selection removed for single join button flow
+  const [role, setRole] = useState<string | null>(null); // role is not used for UI, but can be set by server
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [status, setStatus] = useState<
@@ -18,12 +22,18 @@ function App() {
   useEffect(() => {
     socket.on("chat message", (msg: Message) => {
       setMessages((prev) => [...prev, msg]);
+      // Only increment partnerMsgCount if the message is NOT from me
+      if (msg.sender !== socket.id) {
+        setPartnerMsgCount((prev) => prev + 1);
+      }
     });
     socket.on("waiting", () => {
       setStatus("waiting");
     });
     socket.on("paired", () => {
       setStatus("paired");
+      setMyMsgCount(0);
+      setPartnerMsgCount(0);
     });
     socket.on("partner disconnected", () => {
       setStatus("disconnected");
@@ -40,17 +50,27 @@ function App() {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const chooseRole = (chosen: "AI" | "Human") => {
-    setRole(chosen);
-    socket.emit("choose role", chosen);
+
+  // Join chat handler
+  const joinChat = () => {
+    setStatus("waiting");
+    socket.emit("join chat");
   };
 
+  // Only allow sending if:
+  // - input is not empty
+  // - myMsgCount < 5
+  // - myMsgCount === partnerMsgCount (my turn)
   const sendMessage = () => {
-    if (input.trim() && turnCount < 2) {
-      const msg = { sender: role as string, text: input };
+    if (
+      input.trim() &&
+      myMsgCount < 5 &&
+      myMsgCount === partnerMsgCount
+    ) {
+      const msg = { sender: socket.id, text: input };
       socket.emit("chat message", msg);
       setInput("");
-      setTurnCount((prev) => prev + 1);
+      setMyMsgCount((prev) => prev + 1); // increment myMsgCount immediately on send
     }
   };
 
@@ -59,7 +79,8 @@ function App() {
   };
 
   const resetToEntry = () => {
-    setTurnCount(0);
+    setMyMsgCount(0);
+    setPartnerMsgCount(0);
     socket.disconnect();
     setRole(null);
     setMessages([]);
@@ -83,18 +104,11 @@ function App() {
             <button
               className="doodly-send"
               style={{ margin: 12, fontSize: 22 }}
-              onClick={() => chooseRole("Human")}
+              onClick={joinChat}
             >
-              Enter as Human
+              Join Chat
             </button>
-            <button
-              className="doodly-send"
-              style={{ margin: 12, fontSize: 22 }}
-              onClick={() => chooseRole("AI")}
-            >
-              Enter as AI
-            </button>
-            <h1>Choose your role</h1>
+            <h1>Join the chat</h1>
           </div>
         </div>
       </div>
@@ -113,9 +127,7 @@ function App() {
         }}
       >
         <div style={{ textAlign: "center", width: "100%" }}>
-          <h2>
-            Waiting for a partner to join as {role === "AI" ? "Human" : "AI"}...
-          </h2>
+          <h2>Waiting for a partner to join...</h2>
           <button
             className="doodly-send"
             style={{ margin: 12, fontSize: 18 }}
@@ -154,7 +166,8 @@ function App() {
   }
 
   const quitChat = () => {
-    setTurnCount(0);
+    setMyMsgCount(0);
+    setPartnerMsgCount(0);
     socket.disconnect();
     setRole(null);
     setMessages([]);
@@ -163,6 +176,7 @@ function App() {
     setTimeout(() => socket.connect(), 100); // reconnect after state reset
   };
 
+  const conversationComplete = myMsgCount >= 5 && partnerMsgCount >= 5;
   return (
     <div className="doodly-app">
       <header className="doodly-header" style={{ position: "relative" }}>
@@ -177,15 +191,16 @@ function App() {
       </header>
       <main className="doodly-chat">
         {messages.map((msg, idx) => {
-          const isMe = msg.sender === role;
+          // Show bubbles, but no role highlight
+          const isMe = msg.sender === socket.id;
           return (
             <div
               key={idx}
-              className={`doodly-bubble ${isMe ? "me" : "partner"} ${msg.sender === "AI" ? "ai" : "human"}`}
+              className={`doodly-bubble ${isMe ? "me" : "partner"}`}
               style={{ alignSelf: isMe ? "flex-end" : "flex-start" }}
             >
               <div className="doodly-avatar">
-                {msg.sender === "AI" ? "🤖" : "🙂"}
+                {isMe ? "🧑" : "👤"}
               </div>
               <div className="doodly-text">{msg.text}</div>
             </div>
@@ -198,21 +213,35 @@ function App() {
           className="doodly-input"
           type="text"
           placeholder={
-            turnCount >= 1 ? "You've sent your message" : `Type as ${role}...`
+            conversationComplete
+              ? "Conversation complete"
+              : myMsgCount < 5 && myMsgCount === partnerMsgCount
+              ? "Type your message..."
+              : myMsgCount < 5
+              ? "Wait for partner's reply..."
+              : "Message limit reached"
           }
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          disabled={turnCount >= 1}
+          disabled={
+            conversationComplete ||
+            myMsgCount >= 5 ||
+            myMsgCount > partnerMsgCount
+          }
         />
         <button
           className="doodly-send"
           onClick={sendMessage}
-          disabled={turnCount >= 1}
+          disabled={
+            conversationComplete ||
+            myMsgCount >= 5 ||
+            myMsgCount > partnerMsgCount
+          }
         >
           Send
         </button>
-        {messages.length >= 2 && (
+        {conversationComplete && (
           <div style={{ textAlign: "center", padding: 16, color: "#888" }}>
             — Conversation complete —
             <br />
