@@ -205,14 +205,14 @@ function App() {
         left: 0,
         width: "100%",
         zIndex: 2,
-        background: "#fff",
+        background: "#16171d",
         borderBottom: "1px solid #eee",
         padding: "16px 0 16px 0"
       }}>
         <h1 style={{ margin: 0, textAlign: "center" }}>Doodly Chatbot</h1>
         <button
           className="doodly-send"
-          style={{ position: "absolute", right: 24, top: 24 }}
+          style={{ position: "absolute", right: 24, top: "25%", fontSize: 18 }}
           onClick={quitChat}
         >
           Quit
@@ -253,7 +253,7 @@ function App() {
         left: 0,
         bottom: 0,
         width: "100%",
-        background: "#fff",
+        background: "#16171d",
         borderTop: "1px solid #eee",
         zIndex: 2,
         padding: 12,
@@ -275,7 +275,7 @@ function App() {
           className="doodly-send"
           onClick={sendMessage}
           disabled={!canSend}
-          style={{ fontSize: 18, padding: "8px 18px" }}
+          style={{ fontSize: 18, padding: "8px 18px", marginRight: "20px"}}
         >
           Send
         </button>
