@@ -193,9 +193,23 @@ function App() {
   else inputPlaceholder = "Wait for partner's reply...";
 
   return (
-    <div className="doodly-app">
-      <header className="doodly-header" style={{ position: "relative" }}>
-        <h1>Doodly Chatbot</h1>
+    <div className="doodly-app" style={{
+      display: "flex",
+      flexDirection: "column",
+      height: "100vh",
+      minHeight: 0,
+    }}>
+      <header className="doodly-header" style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        width: "100%",
+        zIndex: 2,
+        background: "#fff",
+        borderBottom: "1px solid #eee",
+        padding: "16px 0 16px 0"
+      }}>
+        <h1 style={{ margin: 0, textAlign: "center" }}>Doodly Chatbot</h1>
         <button
           className="doodly-send"
           style={{ position: "absolute", right: 24, top: 24 }}
@@ -204,7 +218,16 @@ function App() {
           Quit
         </button>
       </header>
-      <main className="doodly-chat">
+      <main className="doodly-chat" style={{
+        flex: 1,
+        overflowY: "auto",
+        marginTop: 72,
+        marginBottom: 90,
+        padding: 16,
+        display: "flex",
+        flexDirection: "column",
+        minHeight: 0,
+      }}>
         {messages.map((msg, idx) => {
           const isMe = msg.sender === socket.id;
           return (
@@ -225,7 +248,19 @@ function App() {
         })}
         <div ref={chatEndRef} />
       </main>
-      <footer className="doodly-footer">
+      <footer className="doodly-footer" style={{
+        position: "fixed",
+        left: 0,
+        bottom: 0,
+        width: "100%",
+        background: "#fff",
+        borderTop: "1px solid #eee",
+        zIndex: 2,
+        padding: 12,
+        display: "flex",
+        gap: 8,
+        alignItems: "center"
+      }}>
         <input
           className="doodly-input"
           type="text"
@@ -234,16 +269,18 @@ function App() {
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
           disabled={!canSend}
+          style={{ flex: 1, fontSize: 18, padding: 8 }}
         />
         <button
           className="doodly-send"
           onClick={sendMessage}
           disabled={!canSend}
+          style={{ fontSize: 18, padding: "8px 18px" }}
         >
           Send
         </button>
         {conversationComplete && (
-          <div style={{ textAlign: "center", padding: 16, color: "#888" }}>
+          <div style={{ textAlign: "center", padding: 16, color: "#888", width: "100%" }}>
             — Conversation complete —
             <br />
             <button
