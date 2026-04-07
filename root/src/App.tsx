@@ -10,8 +10,6 @@ function App() {
   const [myMsgCount, setMyMsgCount] = useState(0);
   // Track how many messages partner has sent
   const [partnerMsgCount, setPartnerMsgCount] = useState(0);
-  // Role selection removed for single join button flow
-  const [role, setRole] = useState<string | null>(null); // role is not used for UI, but can be set by server
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [status, setStatus] = useState<
@@ -62,10 +60,12 @@ function App() {
   // - myMsgCount < 5
   // - myMsgCount === partnerMsgCount (my turn)
   const sendMessage = () => {
+    const lastMsg = messages[messages.length - 1];
     if (
       input.trim() &&
       myMsgCount < 5 &&
-      myMsgCount === partnerMsgCount
+      myMsgCount <= partnerMsgCount &&
+      (!lastMsg || lastMsg.sender !== socket.id)
     ) {
       const msg = { sender: socket.id, text: input };
       socket.emit("chat message", msg);
@@ -82,7 +82,6 @@ function App() {
     setMyMsgCount(0);
     setPartnerMsgCount(0);
     socket.disconnect();
-    setRole(null);
     setMessages([]);
     setInput("");
     setStatus("entry");
@@ -169,7 +168,6 @@ function App() {
     setMyMsgCount(0);
     setPartnerMsgCount(0);
     socket.disconnect();
-    setRole(null);
     setMessages([]);
     setInput("");
     setStatus("entry");
@@ -177,6 +175,20 @@ function App() {
   };
 
   const conversationComplete = myMsgCount >= 5 && partnerMsgCount >= 5;
+  const lastMsg = messages[messages.length - 1];
+  const canSend =
+    !conversationComplete &&
+    myMsgCount < 5 &&
+    myMsgCount <= partnerMsgCount &&
+    (!lastMsg || lastMsg.sender !== socket.id);
+
+  let inputPlaceholder = "";
+  if (conversationComplete) inputPlaceholder = "Conversation complete";
+  else if (myMsgCount >= 5) inputPlaceholder = "Message limit reached";
+  else if (lastMsg && lastMsg.sender === socket.id) inputPlaceholder = "Wait for partner's reply...";
+  else if (myMsgCount < 5 && myMsgCount <= partnerMsgCount) inputPlaceholder = "Type your message...";
+  else inputPlaceholder = "Wait for partner's reply...";
+
   return (
     <div className="doodly-app">
       <header className="doodly-header" style={{ position: "relative" }}>
@@ -197,12 +209,15 @@ function App() {
             <div
               key={idx}
               className={`doodly-bubble ${isMe ? "me" : "partner"}`}
-              style={{ alignSelf: isMe ? "flex-end" : "flex-start" }}
+              style={{
+                alignSelf: isMe ? "flex-end" : "flex-start",
+                maxWidth: "100%",
+                wordBreak: "break-word",
+                whiteSpace: "pre-wrap",
+                overflowWrap: "break-word",
+              }}
             >
-              <div className="doodly-avatar">
-                {isMe ? "🧑" : "👤"}
-              </div>
-              <div className="doodly-text">{msg.text}</div>
+              <div className="doodly-text">{isMe ? "😁" : "🤖❓"}: {msg.text}</div>
             </div>
           );
         })}
@@ -212,32 +227,16 @@ function App() {
         <input
           className="doodly-input"
           type="text"
-          placeholder={
-            conversationComplete
-              ? "Conversation complete"
-              : myMsgCount < 5 && myMsgCount === partnerMsgCount
-              ? "Type your message..."
-              : myMsgCount < 5
-              ? "Wait for partner's reply..."
-              : "Message limit reached"
-          }
+          placeholder={inputPlaceholder}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          disabled={
-            conversationComplete ||
-            myMsgCount >= 5 ||
-            myMsgCount > partnerMsgCount
-          }
+          disabled={!canSend}
         />
         <button
           className="doodly-send"
           onClick={sendMessage}
-          disabled={
-            conversationComplete ||
-            myMsgCount >= 5 ||
-            myMsgCount > partnerMsgCount
-          }
+          disabled={!canSend}
         >
           Send
         </button>
