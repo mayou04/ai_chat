@@ -235,14 +235,20 @@ function App() {
               key={idx}
               className={`doodly-bubble ${isMe ? "me" : "partner"}`}
               style={{
+                display: "flex",
                 alignSelf: isMe ? "flex-end" : "flex-start",
                 maxWidth: "100%",
                 wordBreak: "break-word",
                 whiteSpace: "pre-wrap",
                 overflowWrap: "break-word",
+                flexDirection: isMe ? "row-reverse" : "row",
+                alignItems: "center"
               }}
             >
-              <div className="doodly-text">{isMe ? "😁" : "🤖❓"}: {msg.text}</div>
+              <span className="doodly-avatar" style={{ fontSize: 24, margin: isMe ? "0 0 0 8px" : "0 8px 0 0" }}>
+                {isMe ? "😁" : "🤖❓"}
+              </span>
+              <div className="doodly-text">{msg.text}</div>
             </div>
           );
         })}
