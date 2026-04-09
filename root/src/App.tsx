@@ -26,8 +26,9 @@ function App() {
   useEffect(() => {
     socket.on("chat message", (msg: Message) => {
       setMessages((prev) => [...prev, msg]);
-      // Only increment partnerMsgCount if the message is NOT from me
-      if (msg.sender !== socket.id) {
+      if (msg.sender === socket.id) {
+        setMyMsgCount((prev) => prev + 1);
+      } else {
         setPartnerMsgCount((prev) => prev + 1);
       }
     });
@@ -86,7 +87,6 @@ function App() {
       const msg = { sender: socket.id, text: input };
       socket.emit("chat message", msg);
       setInput("");
-      setMyMsgCount((prev) => prev + 1); // increment myMsgCount immediately on send
     }
   };
 
