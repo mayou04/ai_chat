@@ -13,6 +13,7 @@ function App() {
   const [status, setStatus] = useState<
     "entry" | "waiting" | "paired" | "disconnected"
   >("entry");
+  const [firstTurnId, setFirstTurnId] = useState<string | null>(null); // Who starts
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -26,10 +27,15 @@ function App() {
     socket.on("waiting", () => {
       setStatus("waiting");
     });
-    socket.on("paired", () => {
+    socket.on("paired", (data) => {
       setStatus("paired");
       setMyMsgCount(0);
       setPartnerMsgCount(0);
+      if (data && data.firstId) {
+        setFirstTurnId(data.firstId);
+      } else {
+        setFirstTurnId(null);
+      }
     });
     socket.on("partner disconnected", () => {
       setStatus("disconnected");
@@ -56,13 +62,18 @@ function App() {
   // Only allow sending if:
   // - input is not empty
   // - myMsgCount < 5
-  // - myMsgCount === partnerMsgCount (my turn)
+  // - my turn (see below)
   const sendMessage = () => {
     const lastMsg = messages[messages.length - 1];
+    const isFirst = firstTurnId === socket.id;
+    // Only the chosen starter can send the very first message
+    const isFirstMessage = myMsgCount === 0 && partnerMsgCount === 0;
+    // After the first message, alternate turns: you can send if you've sent less or equal messages than your partner
+    const isMyTurn = (isFirstMessage && isFirst) || (!isFirstMessage && myMsgCount <= partnerMsgCount);
     if (
       input.trim() &&
       myMsgCount < 5 &&
-      myMsgCount <= partnerMsgCount &&
+      isMyTurn &&
       (!lastMsg || lastMsg.sender !== socket.id)
     ) {
       const msg = { sender: socket.id, text: input };
@@ -84,6 +95,7 @@ function App() {
     setInput("");
     setStatus("entry");
     setTimeout(() => socket.connect(), 100);
+    setFirstTurnId(null);
   };
 
   if (status === "entry") {
@@ -178,18 +190,27 @@ function App() {
   };
 
   const conversationComplete = myMsgCount >= 5 && partnerMsgCount >= 5;
+
   const lastMsg = messages[messages.length - 1];
+  // Determine if it's my turn:
+  const isFirst = firstTurnId === socket.id;
+
+  const isFirstMessage = myMsgCount === 0 && partnerMsgCount === 0;
+  const isMyTurn = (isFirstMessage && isFirst) || (!isFirstMessage && myMsgCount <= partnerMsgCount);
   const canSend =
     !conversationComplete &&
     myMsgCount < 5 &&
-    myMsgCount <= partnerMsgCount &&
+    isMyTurn &&
     (!lastMsg || lastMsg.sender !== socket.id);
 
   let inputPlaceholder = "";
   if (conversationComplete) inputPlaceholder = "Conversation complete";
   else if (myMsgCount >= 5) inputPlaceholder = "Message limit reached";
-  else if (lastMsg && lastMsg.sender === socket.id) inputPlaceholder = "Wait for partner's reply...";
-  else if (myMsgCount < 5 && myMsgCount <= partnerMsgCount) inputPlaceholder = "Type your message...";
+  else if (isFirstMessage) {
+    if (firstTurnId === null) inputPlaceholder = "Waiting for pairing...";
+    else if (isFirst) inputPlaceholder = "You start! Type your message...";
+    else inputPlaceholder = "Wait for your partner to start...";
+  } else if (isMyTurn) inputPlaceholder = "Type your message...";
   else inputPlaceholder = "Wait for partner's reply...";
 
   return (

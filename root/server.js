@@ -21,8 +21,14 @@ io.on('connection', (socket) => {
       // Pair with waiting user
       pairs.set(socket.id, waitingSocket.id);
       pairs.set(waitingSocket.id, socket.id);
-      socket.emit('paired');
-      waitingSocket.emit('paired');
+      // Randomly choose who starts
+      const sockets = [socket, waitingSocket];
+      const firstIdx = Math.floor(Math.random() * 2);
+      const firstId = sockets[firstIdx].id;
+      const secondId = sockets[1 - firstIdx].id;
+      // Emit paired with info about who starts
+      sockets[0].emit('paired', { firstId });
+      sockets[1].emit('paired', { firstId });
       waitingSocket = null;
     } else {
       waitingSocket = socket;
