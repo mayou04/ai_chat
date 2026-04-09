@@ -21,6 +21,7 @@ function App() {
     "entry" | "waiting" | "paired" | "disconnected"
   >("entry");
   const [firstTurnId, setFirstTurnId] = useState<string | null>(null); // Who starts
+  const [showLoading, setShowLoading] = useState(false); // Loading screen for finding partner
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -33,9 +34,11 @@ function App() {
       }
     });
     socket.on("waiting", () => {
+      setShowLoading(false);
       setStatus("waiting");
     });
     socket.on("paired", (data) => {
+      setShowLoading(false);
       setStatus("paired");
       setMyMsgCount(0);
       setPartnerMsgCount(0);
@@ -63,8 +66,10 @@ function App() {
 
   // Join chat handler
   const joinChat = () => {
-    setStatus("waiting");
-    socket.emit("join chat");
+    setShowLoading(true);
+    setTimeout(() => {
+      socket.emit("join chat");
+    }, 5000); // 2 second artificial delay
   };
 
   // Only allow sending if:
@@ -105,7 +110,7 @@ function App() {
     setFirstTurnId(null);
   };
 
-  if (status === "entry") {
+  if (status === "entry" || showLoading) {
     return (
       <div
         className="doodly-app"
@@ -121,17 +126,31 @@ function App() {
           display: "flex",
           minHeight: "100vh",
         }}>
-          <div className="doodly-button-wrapper">
-            <h1>Join the chat</h1>
-            <button
-              className="doodly-send"
-              style={{ margin: 12, fontSize: 22 }}
-              onClick={joinChat}
-            >
-              Join Chat
-            </button>
-          </div>
+          {showLoading ? (
+            <div style={{ textAlign: "center" }}>
+              <div className="doodly-loading-spinner" style={{ margin: 24 }}>
+                <svg width="48" height="48" viewBox="0 0 48 48" style={{ animation: "spin 1s linear infinite" }}>
+                  <circle cx="24" cy="24" r="20" stroke="#888" strokeWidth="4" fill="none" strokeDasharray="100" strokeDashoffset="60" />
+                </svg>
+              </div>
+              <h2>Looking for a partner...</h2>
+            </div>
+          ) : (
+            <div className="doodly-button-wrapper">
+              <h1>Join the chat</h1>
+              <button
+                className="doodly-send"
+                style={{ margin: 12, fontSize: 22 }}
+                onClick={joinChat}
+              >
+                Join Chat
+              </button>
+            </div>
+          )}
         </div>
+        <style>{`
+          @keyframes spin { 100% { transform: rotate(360deg); } }
+        `}</style>
       </div>
     );
   }
