@@ -1,12 +1,24 @@
+
 import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 const app = express();
 const server = createServer(app);
 const io = new Server(server, {
   cors: { origin: '*' }
 });
+
+// Serve static files from dist in production
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+if (process.env.NODE_ENV === 'production') {
+  app.use(express.static(path.join(__dirname, 'dist')));
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+  });
+}
 
 // Generic pairing logic
 let waitingSocket = null;
@@ -58,6 +70,7 @@ io.on('connection', (socket) => {
   });
 });
 
-server.listen(3001, () => {
-  console.log('Socket.io server running on http://localhost:3001');
+const PORT = process.env.PORT || 3001;
+server.listen(PORT, () => {
+  console.log(`Socket.io server running on http://localhost:${PORT}`);
 });

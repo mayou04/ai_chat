@@ -1,7 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { io, Socket } from "socket.io-client";
 
-const socket: Socket = io("http://localhost:3001");
+const socket: Socket =
+  typeof window !== 'undefined'
+    ? io(
+        import.meta.env.MODE === 'development'
+          ? 'http://localhost:3001'
+          : window.location.origin
+      )
+    : ({} as Socket);
 
 type Message = { sender: string; text: string };
 
