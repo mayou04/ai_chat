@@ -18,8 +18,9 @@ function App() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [status, setStatus] = useState<
-    "entry" | "waiting" | "paired" | "disconnected"
+    "entry" | "paired" | "disconnected"
   >("entry");
+  const joinTimeout = useRef<number | null>(null);
   const [firstTurnId, setFirstTurnId] = useState<string | null>(null); // Who starts
   const [showLoading, setShowLoading] = useState(false); // Loading screen for finding partner
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -33,10 +34,7 @@ function App() {
         setPartnerMsgCount((prev) => prev + 1);
       }
     });
-    socket.on("waiting", () => {
-      setShowLoading(false);
-      setStatus("waiting");
-    });
+    // Removed 'waiting' event handler
     socket.on("paired", (data) => {
       setShowLoading(false);
       setStatus("paired");
@@ -53,9 +51,9 @@ function App() {
     });
     return () => {
       socket.off("chat message");
-      socket.off("waiting");
       socket.off("paired");
       socket.off("partner disconnected");
+      if (joinTimeout.current) clearTimeout(joinTimeout.current);
     };
   }, []);
 
@@ -67,9 +65,19 @@ function App() {
   // Join chat handler
   const joinChat = () => {
     setShowLoading(true);
-    setTimeout(() => {
+    joinTimeout.current = window.setTimeout(() => {
       socket.emit("join chat");
-    }, 5000); // 2 second artificial delay
+      joinTimeout.current = null;
+    }, 5000); // 5 second artificial delay
+  };
+
+  const cancelJoin = () => {
+    setShowLoading(false);
+    setStatus("entry");
+    if (joinTimeout.current) {
+      clearTimeout(joinTimeout.current);
+      joinTimeout.current = null;
+    }
   };
 
   // Only allow sending if:
@@ -134,6 +142,13 @@ function App() {
                 </svg>
               </div>
               <h2>Looking for a partner...</h2>
+              <button
+                className="doodly-send"
+                style={{ margin: 12, fontSize: 18 }}
+                onClick={cancelJoin}
+              >
+                Cancel
+              </button>
             </div>
           ) : (
             <div className="doodly-button-wrapper">
@@ -155,30 +170,7 @@ function App() {
     );
   }
 
-  if (status === "waiting") {
-    return (
-      <div
-        className="doodly-app"
-        style={{
-          justifyContent: "center",
-          alignItems: "center",
-          display: "flex",
-          minHeight: "100vh",
-        }}
-      >
-        <div style={{ textAlign: "center", width: "100%" }}>
-          <h2>Waiting for a partner to join...</h2>
-          <button
-            className="doodly-send"
-            style={{ margin: 12, fontSize: 18 }}
-            onClick={resetToEntry}
-          >
-            Cancel
-          </button>
-        </div>
-      </div>
-    );
-  }
+  // Removed 'waiting' state UI
 
   const quitChat = () => {
     setMyMsgCount(0);
