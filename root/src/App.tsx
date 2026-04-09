@@ -154,31 +154,6 @@ function App() {
     );
   }
 
-  if (status === "disconnected") {
-    return (
-      <div
-        className="doodly-app"
-        style={{
-          justifyContent: "center",
-          alignItems: "center",
-          display: "flex",
-          minHeight: "100vh",
-        }}
-      >
-        <div style={{ textAlign: "center", width: "100%" }}>
-          <h2>Your partner disconnected.</h2>
-          <button
-            className="doodly-send"
-            style={{ margin: 12, fontSize: 18 }}
-            onClick={resetToEntry}
-          >
-            Restart
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   const quitChat = () => {
     setMyMsgCount(0);
     setPartnerMsgCount(0);
@@ -274,6 +249,33 @@ function App() {
           );
         })}
         <div ref={chatEndRef} />
+        {/* Conversation complete or disconnected message at the end of chat */}
+        {conversationComplete && (
+          <div style={{ textAlign: "center", padding: 16, color: "#888", width: "100%" }}>
+            — Conversation complete —
+            <br />
+            <button
+              className="doodly-send"
+              style={{ marginTop: 10 }}
+              onClick={quitChat}
+            >
+              Start Over
+            </button>
+          </div>
+        )}
+        {status === "disconnected" && !conversationComplete && (
+          <div style={{ textAlign: "center", padding: 16, color: "#e88", width: "100%" }}>
+            — Your partner disconnected —
+            <br />
+            <button
+              className="doodly-send"
+              style={{ marginTop: 10 }}
+              onClick={resetToEntry}
+            >
+              Restart
+            </button>
+          </div>
+        )}
       </main>
       <footer className="doodly-footer" style={{
         position: "fixed",
@@ -295,30 +297,17 @@ function App() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          disabled={!canSend}
+          disabled={!canSend || status === "disconnected" || conversationComplete}
           style={{ flex: 1, fontSize: 18, padding: 8 }}
         />
         <button
           className="doodly-send"
           onClick={sendMessage}
-          disabled={!canSend}
+          disabled={!canSend || status === "disconnected" || conversationComplete}
           style={{ fontSize: 18, padding: "8px 18px", marginRight: "20px"}}
         >
           Send
         </button>
-        {conversationComplete && (
-          <div style={{ textAlign: "center", padding: 16, color: "#888", width: "100%" }}>
-            — Conversation complete —
-            <br />
-            <button
-              className="doodly-send"
-              style={{ marginTop: 10 }}
-              onClick={quitChat}
-            >
-              Start Over
-            </button>
-          </div>
-        )}
       </footer>
     </div>
   );
