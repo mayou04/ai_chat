@@ -1,5 +1,3 @@
-
-
 import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
@@ -25,8 +23,17 @@ app.use((req, res, next) => {
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 if (process.env.NODE_ENV === 'production') {
   app.use(express.static(path.join(__dirname, 'dist')));
-  app.get('/:any(*)', (req, res) => {
-    res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+  // Universal handler for React SPA (Express 5 compatible)
+  app.use((req, res, next) => {
+    if (
+      req.method === 'GET' &&
+      !req.path.startsWith('/socket.io') &&
+      !req.path.startsWith('/api') // adjust/remove if you have API routes
+    ) {
+      res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+    } else {
+      next();
+    }
   });
 }
 
