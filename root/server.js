@@ -1,11 +1,4 @@
-// Set Content Security Policy header for all responses
-app.use((req, res, next) => {
-  res.setHeader(
-    "Content-Security-Policy",
-    "default-src 'self'; img-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'"
-  );
-  next();
-});
+
 
 import express from 'express';
 import { createServer } from 'http';
@@ -17,6 +10,15 @@ const app = express();
 const server = createServer(app);
 const io = new Server(server, {
   cors: { origin: '*' }
+});
+
+// Set Content Security Policy header for all responses
+app.use((req, res, next) => {
+  res.setHeader(
+    "Content-Security-Policy",
+    "default-src 'self'; img-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'"
+  );
+  next();
 });
 
 // Serve static files from dist in production
