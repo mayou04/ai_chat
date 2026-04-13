@@ -8,10 +8,10 @@ const client = new GoogleGenAI({
 });
 
 const socket: Socket =
-  typeof window !== "undefined"
+  typeof window !== 'undefined'
     ? io(
-        import.meta.env.MODE === "development"
-          ? "http://localhost:3001"
+        import.meta.env.MODE === 'development'
+          ? 'http://localhost:3001'
           : window.location.origin
       )
     : ({} as Socket);
@@ -20,16 +20,17 @@ type Message = { sender: string; text: string };
 type Role = "Human" | "FakeAI" | "RealAI";
 
 function App() {
-  const [role, setRole] = useState<Role | null>(null);
-  const [myMsgCount, setMyMsgCount] = useState(0); // Msgs sent by this client
-  const [partnerMsgCount, setPartnerMsgCount] = useState(0); // Msgs sent by partner client
+  const [role, setRole] = useState<Role | null>(null); // Restored role state
+  const [myMsgCount, setMyMsgCount] = useState(0); 
+  const [partnerMsgCount, setPartnerMsgCount] = useState(0); 
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
-  const [status, setStatus] = useState<"entry" | "paired" | "disconnected">("entry");
-  const joinTimeout = useRef<number | null>(null);
-  const [firstTurnId, setFirstTurnId] = useState<string | null>(null); // Who starts
-  const [showLoading, setShowLoading] = useState(false); // Loading screen for finding partner
+  const [status, setStatus] = useState<
+    "entry" | "waiting" | "paired" | "disconnected"
+  >("entry");
+  const [firstTurnId, setFirstTurnId] = useState<string | null>(null); 
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const joinTimeout = useRef<number | null>(null); // Restored to prevent cleanup errors
 
   useEffect(() => {
     socket.on("chat message", (msg: Message) => {
@@ -40,9 +41,10 @@ function App() {
         setPartnerMsgCount((prev) => prev + 1);
       }
     });
-
+    socket.on("waiting", () => {
+      setStatus("waiting");
+    });
     socket.on("paired", (data) => {
-      setShowLoading(false);
       setStatus("paired");
       setMyMsgCount(0);
       setPartnerMsgCount(0);
@@ -59,6 +61,7 @@ function App() {
 
     return () => {
       socket.off("chat message");
+      socket.off("waiting");
       socket.off("paired");
       socket.off("partner disconnected");
       if (joinTimeout.current) clearTimeout(joinTimeout.current);
@@ -69,29 +72,17 @@ function App() {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Join chat handler
+  // Restored Role Selection for Join Chat
   const joinChat = (selectedRole: Role) => {
     setRole(selectedRole);
-    setShowLoading(true);
-    joinTimeout.current = window.setTimeout(() => {
-      const serverRole = selectedRole === "Human" ? "Human" : "AI";
-      socket.emit("choose role", serverRole); // Preserved for backend pairing
-      socket.emit("join chat"); // Preserved in case your backend uses this
-      joinTimeout.current = null;
-    }, 5000); // 5 second artificial delay
+    setStatus("waiting");
+    
+    // Mask the role for the server
+    const serverRole = selectedRole === "Human" ? "Human" : "AI";
+    socket.emit("choose role", serverRole);
+    socket.emit("join chat"); // Preserved in case main branch's server requires it
   };
 
-  const cancelJoin = () => {
-    setShowLoading(false);
-    setStatus("entry");
-    setRole(null);
-    if (joinTimeout.current) {
-      clearTimeout(joinTimeout.current);
-      joinTimeout.current = null;
-    }
-  };
-
-  // Determine turns
   const conversationComplete = myMsgCount >= 5 && partnerMsgCount >= 5;
   const lastMsg = messages[messages.length - 1];
   const isFirst = firstTurnId === socket.id;
@@ -112,13 +103,11 @@ function App() {
     }
   };
 
-  // --- REAL AI BOT LOGIC ---
+  // --- RESTORED REAL AI BOT LOGIC ---
   useEffect(() => {
     if (status === "paired" && role === "RealAI" && canSend) {
       const generateBotResponse = async () => {
         try {
-          // If it's the very first message, give the AI a default prompt to start. 
-          // Otherwise, pass the chat history.
           let prompt = "You are an AI chatting with a human. Say hello and start the conversation!";
           if (messages.length > 0) {
              prompt = messages.map((m) => `${m.sender === socket.id ? "AI" : "Human"}: ${m.text}`).join("\n") + "\nAI:";
@@ -140,7 +129,7 @@ function App() {
       generateBotResponse();
     }
   }, [status, role, canSend, messages]);
-  // -------------------------
+  // ----------------------------------
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") sendMessage();
@@ -173,7 +162,7 @@ function App() {
   } else if (isMyTurn) inputPlaceholder = "Type your message...";
   else inputPlaceholder = "Wait for partner's reply...";
 
-  if (status === "entry" || showLoading) {
+  if (status === "entry") {
     return (
       <div
         className="doodly-app"
@@ -189,52 +178,57 @@ function App() {
           display: "flex",
           minHeight: "100vh",
         }}>
-          {showLoading ? (
-            <div style={{ textAlign: "center" }}>
-              <div className="doodly-loading-spinner" style={{ margin: 24 }}>
-                <svg width="48" height="48" viewBox="0 0 48 48" style={{ animation: "spin 1s linear infinite" }}>
-                  <circle cx="24" cy="24" r="20" stroke="#888" strokeWidth="4" fill="none" strokeDasharray="100" strokeDashoffset="60" />
-                </svg>
-              </div>
-              <h2>Looking for a partner...</h2>
-              <button
-                className="doodly-send"
-                style={{ margin: 12, fontSize: 18 }}
-                onClick={cancelJoin}
-              >
-                Cancel
-              </button>
-            </div>
-          ) : (
-            <div className="doodly-button-wrapper" style={{ flexDirection: "column", alignItems: "center" }}>
-              <h1>Join the chat</h1>
-              <button
-                className="doodly-send"
-                style={{ margin: 12, fontSize: 22, width: "100%" }}
-                onClick={() => joinChat("Human")}
-              >
-                Join as Human
-              </button>
-              <button
-                className="doodly-send"
-                style={{ margin: 12, fontSize: 22, width: "100%" }}
-                onClick={() => joinChat("FakeAI")}
-              >
-                Join as Fake AI
-              </button>
-              <button
-                className="doodly-send"
-                style={{ margin: 12, fontSize: 22, width: "100%" }}
-                onClick={() => joinChat("RealAI")}
-              >
-                Join as Real AI Bot
-              </button>
-            </div>
-          )}
+          {/* Restored the 3 Role Buttons */}
+          <div className="doodly-button-wrapper" style={{ flexDirection: "column", alignItems: "center" }}>
+            <h1>Join the chat</h1>
+            <button
+              className="doodly-send"
+              style={{ margin: 12, fontSize: 22, width: "100%" }}
+              onClick={() => joinChat("Human")}
+            >
+              Join as Human
+            </button>
+            <button
+              className="doodly-send"
+              style={{ margin: 12, fontSize: 22, width: "100%" }}
+              onClick={() => joinChat("FakeAI")}
+            >
+              Join as Fake AI
+            </button>
+            <button
+              className="doodly-send"
+              style={{ margin: 12, fontSize: 22, width: "100%" }}
+              onClick={() => joinChat("RealAI")}
+            >
+              Join as Real AI Bot
+            </button>
+          </div>
         </div>
-        <style>{`
-          @keyframes spin { 100% { transform: rotate(360deg); } }
-        `}</style>
+      </div>
+    );
+  }
+
+  if (status === "waiting") {
+    return (
+      <div
+        className="doodly-app"
+        style={{
+          justifyContent: "center",
+          alignItems: "center",
+          display: "flex",
+          minHeight: "100vh",
+        }}
+      >
+        <div style={{ textAlign: "center", width: "100%" }}>
+          <h2>Waiting for a partner to join...</h2>
+          <button
+            className="doodly-send"
+            style={{ margin: 12, fontSize: 18 }}
+            onClick={resetToEntry}
+          >
+            Cancel
+          </button>
+        </div>
       </div>
     );
   }
@@ -300,7 +294,7 @@ function App() {
           );
         })}
         <div ref={chatEndRef} />
-        
+        {/* Conversation complete or disconnected message at the end of chat */}
         {conversationComplete && (
           <div style={{ textAlign: "center", padding: 16, color: "#888", width: "100%" }}>
             — Conversation complete —
@@ -348,6 +342,7 @@ function App() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
+          // Disabled if it's the RealAI so the user can't type for the bot
           disabled={!canSend || status === "disconnected" || conversationComplete || role === "RealAI"}
           style={{ flex: 1, fontSize: 18, padding: 8 }}
         />
