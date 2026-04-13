@@ -1,38 +1,67 @@
 import { useEffect, useRef, useState } from "react";
 import { io, Socket } from "socket.io-client";
+import { GoogleGenAI } from "@google/genai";
 
-const socket: Socket = io("http://localhost:3001");
+// Initialize Gemini (assuming Vite based on your import.meta.env usage)
+const client = new GoogleGenAI({
+  apiKey: import.meta.env.VITE_GOOGLE_GENAI_API_KEY,
+});
+
+const socket: Socket =
+  typeof window !== "undefined"
+    ? io(
+        import.meta.env.MODE === "development"
+          ? "http://localhost:3001"
+          : window.location.origin
+      )
+    : ({} as Socket);
 
 type Message = { sender: string; text: string };
+type Role = "Human" | "FakeAI" | "RealAI";
 
 function App() {
-  const [turnCount, setTurnCount] = useState(0);
-  const [role, setRole] = useState<"AI" | "Human" | null>(null);
+  const [role, setRole] = useState<Role | null>(null);
+  const [myMsgCount, setMyMsgCount] = useState(0); // Msgs sent by this client
+  const [partnerMsgCount, setPartnerMsgCount] = useState(0); // Msgs sent by partner client
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
-  const [status, setStatus] = useState<
-    "entry" | "waiting" | "paired" | "disconnected"
-  >("entry");
+  const [status, setStatus] = useState<"entry" | "paired" | "disconnected">("entry");
+  const joinTimeout = useRef<number | null>(null);
+  const [firstTurnId, setFirstTurnId] = useState<string | null>(null); // Who starts
+  const [showLoading, setShowLoading] = useState(false); // Loading screen for finding partner
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     socket.on("chat message", (msg: Message) => {
       setMessages((prev) => [...prev, msg]);
+      if (msg.sender === socket.id) {
+        setMyMsgCount((prev) => prev + 1);
+      } else {
+        setPartnerMsgCount((prev) => prev + 1);
+      }
     });
-    socket.on("waiting", () => {
-      setStatus("waiting");
-    });
-    socket.on("paired", () => {
+
+    socket.on("paired", (data) => {
+      setShowLoading(false);
       setStatus("paired");
+      setMyMsgCount(0);
+      setPartnerMsgCount(0);
+      if (data && data.firstId) {
+        setFirstTurnId(data.firstId);
+      } else {
+        setFirstTurnId(null);
+      }
     });
+
     socket.on("partner disconnected", () => {
       setStatus("disconnected");
     });
+
     return () => {
       socket.off("chat message");
-      socket.off("waiting");
       socket.off("paired");
       socket.off("partner disconnected");
+      if (joinTimeout.current) clearTimeout(joinTimeout.current);
     };
   }, []);
 
@@ -40,180 +69,240 @@ function App() {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const chooseRole = (chosen: "AI" | "Human") => {
-    setRole(chosen);
-    socket.emit("choose role", chosen);
+  // Join chat handler
+  const joinChat = (selectedRole: Role) => {
+    setRole(selectedRole);
+    setShowLoading(true);
+    joinTimeout.current = window.setTimeout(() => {
+      const serverRole = selectedRole === "Human" ? "Human" : "AI";
+      socket.emit("choose role", serverRole); // Preserved for backend pairing
+      socket.emit("join chat"); // Preserved in case your backend uses this
+      joinTimeout.current = null;
+    }, 5000); // 5 second artificial delay
   };
 
-  const sendMessage = () => {
-    if (input.trim() && turnCount < 2) {
-      const msg = { sender: role as string, text: input };
-      socket.emit("chat message", msg);
-      setInput("");
-      setTurnCount((prev) => prev + 1);
+  const cancelJoin = () => {
+    setShowLoading(false);
+    setStatus("entry");
+    setRole(null);
+    if (joinTimeout.current) {
+      clearTimeout(joinTimeout.current);
+      joinTimeout.current = null;
     }
   };
+
+  // Determine turns
+  const conversationComplete = myMsgCount >= 5 && partnerMsgCount >= 5;
+  const lastMsg = messages[messages.length - 1];
+  const isFirst = firstTurnId === socket.id;
+  const isFirstMessage = myMsgCount === 0 && partnerMsgCount === 0;
+  const isMyTurn = (isFirstMessage && isFirst) || (!isFirstMessage && myMsgCount <= partnerMsgCount);
+
+  const canSend =
+    !conversationComplete &&
+    myMsgCount < 5 &&
+    isMyTurn &&
+    (!lastMsg || lastMsg.sender !== socket.id);
+
+  const sendMessage = () => {
+    if (input.trim() && canSend) {
+      const msg = { sender: socket.id, text: input };
+      socket.emit("chat message", msg);
+      setInput("");
+    }
+  };
+
+  // --- REAL AI BOT LOGIC ---
+  useEffect(() => {
+    if (status === "paired" && role === "RealAI" && canSend) {
+      const generateBotResponse = async () => {
+        try {
+          // If it's the very first message, give the AI a default prompt to start. 
+          // Otherwise, pass the chat history.
+          let prompt = "You are an AI chatting with a human. Say hello and start the conversation!";
+          if (messages.length > 0) {
+             prompt = messages.map((m) => `${m.sender === socket.id ? "AI" : "Human"}: ${m.text}`).join("\n") + "\nAI:";
+          }
+
+          const response = await client.models.generateContent({
+            model: "gemini-3-flash-preview",
+            contents: prompt,
+          });
+
+          const botText = response.text?.trim() || "Hmm...";
+          socket.emit("chat message", { sender: socket.id, text: botText });
+          
+        } catch (err) {
+          console.error("AI Generation Error:", err);
+        }
+      };
+
+      generateBotResponse();
+    }
+  }, [status, role, canSend, messages]);
+  // -------------------------
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") sendMessage();
   };
 
   const resetToEntry = () => {
-    setTurnCount(0);
+    setMyMsgCount(0);
+    setPartnerMsgCount(0);
     socket.disconnect();
-    setRole(null);
     setMessages([]);
     setInput("");
     setStatus("entry");
+    setRole(null);
     setTimeout(() => socket.connect(), 100);
+    setFirstTurnId(null);
   };
-
-  if (status === "entry") {
-    return (
-      <div
-        className="doodly-app"
-        style={{
-          justifyContent: "center",
-          display: "flex",
-          minHeight: "100vh",
-        }}
-      >
-        <div style={{ textAlign: "center", width: "100%" }}>
-          <div className="doodly-button-wrapper">
-            <button
-              className="doodly-send"
-              style={{ margin: 12, fontSize: 22 }}
-              onClick={() => chooseRole("Human")}
-            >
-              Enter as Human
-            </button>
-            <button
-              className="doodly-send"
-              style={{ margin: 12, fontSize: 22 }}
-              onClick={() => chooseRole("AI")}
-            >
-              Enter as AI
-            </button>
-            <h1>Choose your role</h1>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (status === "waiting") {
-    return (
-      <div
-        className="doodly-app"
-        style={{
-          justifyContent: "center",
-          alignItems: "center",
-          display: "flex",
-          minHeight: "100vh",
-        }}
-      >
-        <div style={{ textAlign: "center", width: "100%" }}>
-          <h2>
-            Waiting for a partner to join as {role === "AI" ? "Human" : "AI"}...
-          </h2>
-          <button
-            className="doodly-send"
-            style={{ margin: 12, fontSize: 18 }}
-            onClick={resetToEntry}
-          >
-            Cancel
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  if (status === "disconnected") {
-    return (
-      <div
-        className="doodly-app"
-        style={{
-          justifyContent: "center",
-          alignItems: "center",
-          display: "flex",
-          minHeight: "100vh",
-        }}
-      >
-        <div style={{ textAlign: "center", width: "100%" }}>
-          <h2>Your partner disconnected.</h2>
-          <button
-            className="doodly-send"
-            style={{ margin: 12, fontSize: 18 }}
-            onClick={resetToEntry}
-          >
-            Restart
-          </button>
-        </div>
-      </div>
-    );
-  }
 
   const quitChat = () => {
-    setTurnCount(0);
-    socket.disconnect();
-    setRole(null);
-    setMessages([]);
-    setInput("");
-    setStatus("entry");
-    setTimeout(() => socket.connect(), 100); // reconnect after state reset
+    resetToEntry();
   };
 
+  let inputPlaceholder = "";
+  if (conversationComplete) inputPlaceholder = "Conversation complete";
+  else if (myMsgCount >= 5) inputPlaceholder = "Message limit reached";
+  else if (role === "RealAI") inputPlaceholder = "AI is thinking...";
+  else if (isFirstMessage) {
+    if (firstTurnId === null) inputPlaceholder = "Waiting for pairing...";
+    else if (isFirst) inputPlaceholder = "You start! Type your message...";
+    else inputPlaceholder = "Wait for your partner to start...";
+  } else if (isMyTurn) inputPlaceholder = "Type your message...";
+  else inputPlaceholder = "Wait for partner's reply...";
+
+  if (status === "entry" || showLoading) {
+    return (
+      <div
+        className="doodly-app"
+        style={{
+          justifyContent: "center",
+          display: "flex",
+          minHeight: "100vh",
+        }}
+      >
+        <div style={{
+          justifyContent: "center",
+          alignItems: "center",
+          display: "flex",
+          minHeight: "100vh",
+        }}>
+          {showLoading ? (
+            <div style={{ textAlign: "center" }}>
+              <div className="doodly-loading-spinner" style={{ margin: 24 }}>
+                <svg width="48" height="48" viewBox="0 0 48 48" style={{ animation: "spin 1s linear infinite" }}>
+                  <circle cx="24" cy="24" r="20" stroke="#888" strokeWidth="4" fill="none" strokeDasharray="100" strokeDashoffset="60" />
+                </svg>
+              </div>
+              <h2>Looking for a partner...</h2>
+              <button
+                className="doodly-send"
+                style={{ margin: 12, fontSize: 18 }}
+                onClick={cancelJoin}
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <div className="doodly-button-wrapper" style={{ flexDirection: "column", alignItems: "center" }}>
+              <h1>Join the chat</h1>
+              <button
+                className="doodly-send"
+                style={{ margin: 12, fontSize: 22, width: "100%" }}
+                onClick={() => joinChat("Human")}
+              >
+                Join as Human
+              </button>
+              <button
+                className="doodly-send"
+                style={{ margin: 12, fontSize: 22, width: "100%" }}
+                onClick={() => joinChat("FakeAI")}
+              >
+                Join as Fake AI
+              </button>
+              <button
+                className="doodly-send"
+                style={{ margin: 12, fontSize: 22, width: "100%" }}
+                onClick={() => joinChat("RealAI")}
+              >
+                Join as Real AI Bot
+              </button>
+            </div>
+          )}
+        </div>
+        <style>{`
+          @keyframes spin { 100% { transform: rotate(360deg); } }
+        `}</style>
+      </div>
+    );
+  }
+
   return (
-    <div className="doodly-app">
-      <header className="doodly-header" style={{ position: "relative" }}>
-        <h1>Doodly Chatbot</h1>
+    <div className="doodly-app" style={{
+      display: "flex",
+      flexDirection: "column",
+      height: "100vh",
+      minHeight: 0,
+    }}>
+      <header className="doodly-header" style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        width: "100%",
+        zIndex: 2,
+        background: "#16171d",
+        borderBottom: "1px solid #eee",
+        padding: "16px 0 16px 0"
+      }}>
+        <h1 style={{ margin: 0, textAlign: "center" }}>Doodly Chatbot</h1>
         <button
           className="doodly-send"
-          style={{ position: "absolute", right: 24, top: 24 }}
+          style={{ position: "absolute", right: 24, top: "25%", fontSize: 18 }}
           onClick={quitChat}
         >
           Quit
         </button>
       </header>
-      <main className="doodly-chat">
+      <main className="doodly-chat" style={{
+        flex: 1,
+        overflowY: "auto",
+        marginTop: 72,
+        marginBottom: 90,
+        padding: 16,
+        display: "flex",
+        flexDirection: "column",
+        minHeight: 0,
+      }}>
         {messages.map((msg, idx) => {
-          const isMe = msg.sender === role;
+          const isMe = msg.sender === socket.id;
           return (
             <div
               key={idx}
-              className={`doodly-bubble ${isMe ? "me" : "partner"} ${msg.sender === "AI" ? "ai" : "human"}`}
-              style={{ alignSelf: isMe ? "flex-end" : "flex-start" }}
+              className={`doodly-bubble ${isMe ? "me" : "partner"}`}
+              style={{
+                display: "flex",
+                alignSelf: isMe ? "flex-end" : "flex-start",
+                maxWidth: "100%",
+                wordBreak: "break-word",
+                whiteSpace: "pre-wrap",
+                overflowWrap: "break-word",
+                flexDirection: isMe ? "row-reverse" : "row",
+                alignItems: "center"
+              }}
             >
-              <div className="doodly-avatar">
-                {msg.sender === "AI" ? "🤖" : "🙂"}
-              </div>
+              <span className="doodly-avatar" style={{ fontSize: 24, margin: isMe ? "0 0 0 8px" : "0 8px 0 0" }}>
+                {isMe ? "😁" : "🤖❓"}
+              </span>
               <div className="doodly-text">{msg.text}</div>
             </div>
           );
         })}
         <div ref={chatEndRef} />
-      </main>
-      <footer className="doodly-footer">
-        <input
-          className="doodly-input"
-          type="text"
-          placeholder={
-            turnCount >= 1 ? "You've sent your message" : `Type as ${role}...`
-          }
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          disabled={turnCount >= 1}
-        />
-        <button
-          className="doodly-send"
-          onClick={sendMessage}
-          disabled={turnCount >= 1}
-        >
-          Send
-        </button>
-        {messages.length >= 2 && (
-          <div style={{ textAlign: "center", padding: 16, color: "#888" }}>
+        
+        {conversationComplete && (
+          <div style={{ textAlign: "center", padding: 16, color: "#888", width: "100%" }}>
             — Conversation complete —
             <br />
             <button
@@ -225,6 +314,51 @@ function App() {
             </button>
           </div>
         )}
+        {status === "disconnected" && !conversationComplete && (
+          <div style={{ textAlign: "center", padding: 16, color: "#e88", width: "100%" }}>
+            — Your partner disconnected —
+            <br />
+            <button
+              className="doodly-send"
+              style={{ marginTop: 10 }}
+              onClick={resetToEntry}
+            >
+              Restart
+            </button>
+          </div>
+        )}
+      </main>
+      <footer className="doodly-footer" style={{
+        position: "fixed",
+        left: 0,
+        bottom: 0,
+        width: "100%",
+        background: "#16171d",
+        borderTop: "1px solid #eee",
+        zIndex: 2,
+        padding: 12,
+        display: "flex",
+        gap: 8,
+        alignItems: "center"
+      }}>
+        <input
+          className="doodly-input"
+          type="text"
+          placeholder={inputPlaceholder}
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={handleKeyDown}
+          disabled={!canSend || status === "disconnected" || conversationComplete || role === "RealAI"}
+          style={{ flex: 1, fontSize: 18, padding: 8 }}
+        />
+        <button
+          className="doodly-send"
+          onClick={sendMessage}
+          disabled={!canSend || status === "disconnected" || conversationComplete || role === "RealAI"}
+          style={{ fontSize: 18, padding: "8px 18px", marginRight: "20px"}}
+        >
+          Send
+        </button>
       </footer>
     </div>
   );

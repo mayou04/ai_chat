@@ -1,0 +1,622 @@
+import { useEffect, useRef, useState } from "react";
+import { io, Socket } from "socket.io-client";
+
+const socket: Socket =
+  typeof window !== 'undefined'
+    ? io(
+        import.meta.env.MODE === 'development'
+          ? 'http://localhost:3001'
+          : window.location.origin
+      )
+    : ({} as Socket);
+
+type Message = { sender: string; text: string };
+
+function App() {
+  const [myMsgCount, setMyMsgCount] = useState(0); // Msgs sent by this client
+  const [partnerMsgCount, setPartnerMsgCount] = useState(0); // Msgs sent by partner client
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [input, setInput] = useState("");
+  const [status, setStatus] = useState<
+    "entry" | "waiting" | "paired" | "disconnected"
+  >("entry");
+  const [firstTurnId, setFirstTurnId] = useState<string | null>(null); // Who starts
+  const chatEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    socket.on("chat message", (msg: Message) => {
+      setMessages((prev) => [...prev, msg]);
+      if (msg.sender === socket.id) {
+        setMyMsgCount((prev) => prev + 1);
+      } else {
+        setPartnerMsgCount((prev) => prev + 1);
+      }
+    });
+    socket.on("waiting", () => {
+      setStatus("waiting");
+    });
+    socket.on("paired", (data) => {
+      setStatus("paired");
+      setMyMsgCount(0);
+      setPartnerMsgCount(0);
+      if (data && data.firstId) {
+        setFirstTurnId(data.firstId);
+      } else {
+        setFirstTurnId(null);
+      }
+    });
+    socket.on("partner disconnected", () => {
+      setStatus("disconnected");
+    });
+    return () => {
+      socket.off("chat message");
+      socket.off("waiting");
+      socket.off("paired");
+      socket.off("partner disconnected");
+    };
+  }, []);
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+
+  // Join chat handler
+  const joinChat = () => {
+    setStatus("waiting");
+    socket.emit("join chat");
+  };
+
+  // Only allow sending if:
+  // - input is not empty
+  // - myMsgCount < 5
+  // - my turn (see below)
+  const sendMessage = () => {
+    const lastMsg = messages[messages.length - 1];
+    const isFirst = firstTurnId === socket.id;
+    // Only the chosen starter can send the very first message
+    const isFirstMessage = myMsgCount === 0 && partnerMsgCount === 0;
+    // After the first message, alternate turns: you can send if you've sent less or equal messages than your partner
+    const isMyTurn = (isFirstMessage && isFirst) || (!isFirstMessage && myMsgCount <= partnerMsgCount);
+    if (
+      input.trim() &&
+      myMsgCount < 5 &&
+      isMyTurn &&
+      (!lastMsg || lastMsg.sender !== socket.id)
+    ) {
+      const msg = { sender: socket.id, text: input };
+      socket.emit("chat message", msg);
+      setInput("");
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") sendMessage();
+  };
+
+  const resetToEntry = () => {
+    setMyMsgCount(0);
+    setPartnerMsgCount(0);
+    socket.disconnect();
+    setMessages([]);
+    setInput("");
+    setStatus("entry");
+    setTimeout(() => socket.connect(), 100);
+    setFirstTurnId(null);
+  };
+
+  if (status === "entry") {
+    return (
+      <div
+        className="doodly-app"
+        style={{
+          justifyContent: "center",
+          display: "flex",
+          minHeight: "100vh",
+        }}
+      >
+        <div style={{
+          justifyContent: "center",
+          alignItems: "center",
+          display: "flex",
+          minHeight: "100vh",
+        }}>
+          <div className="doodly-button-wrapper">
+            <h1>Join the chat</h1>
+            <button
+              className="doodly-send"
+              style={{ margin: 12, fontSize: 22 }}
+              onClick={joinChat}
+            >
+              Join Chat
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (status === "waiting") {
+    return (
+      <div
+        className="doodly-app"
+        style={{
+          justifyContent: "center",
+          alignItems: "center",
+          display: "flex",
+          minHeight: "100vh",
+        }}
+      >
+        <div style={{ textAlign: "center", width: "100%" }}>
+          <h2>Waiting for a partner to join...</h2>
+          <button
+            className="doodly-send"
+            style={{ margin: 12, fontSize: 18 }}
+            onClick={resetToEntry}
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const quitChat = () => {
+    setMyMsgCount(0);
+    setPartnerMsgCount(0);
+    socket.disconnect();
+    setMessages([]);
+    setInput("");
+    setStatus("entry");
+    setTimeout(() => socket.connect(), 100); // reconnect after state reset
+  };
+
+  const conversationComplete = myMsgCount >= 5 && partnerMsgCount >= 5;
+
+  const lastMsg = messages[messages.length - 1];
+  // Determine if it's my turn:
+  const isFirst = firstTurnId === socket.id;
+
+  const isFirstMessage = myMsgCount === 0 && partnerMsgCount === 0;
+  const isMyTurn = (isFirstMessage && isFirst) || (!isFirstMessage && myMsgCount <= partnerMsgCount);
+  const canSend =
+    !conversationComplete &&
+    myMsgCount < 5 &&
+    isMyTurn &&
+    (!lastMsg || lastMsg.sender !== socket.id);
+
+  let inputPlaceholder = "";
+  if (conversationComplete) inputPlaceholder = "Conversation complete";
+  else if (myMsgCount >= 5) inputPlaceholder = "Message limit reached";
+  else if (isFirstMessage) {
+    if (firstTurnId === null) inputPlaceholder = "Waiting for pairing...";
+    else if (isFirst) inputPlaceholder = "You start! Type your message...";
+    else inputPlaceholder = "Wait for your partner to start...";
+  } else if (isMyTurn) inputPlaceholder = "Type your message...";
+  else inputPlaceholder = "Wait for partner's reply...";
+
+  return (
+    <div className="doodly-app" style={{
+      display: "flex",
+      flexDirection: "column",
+      height: "100vh",
+      minHeight: 0,
+    }}>
+      <header className="doodly-header" style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        width: "100%",
+        zIndex: 2,
+        background: "#16171d",
+        borderBottom: "1px solid #eee",
+        padding: "16px 0 16px 0"
+      }}>
+        <h1 style={{ margin: 0, textAlign: "center" }}>Doodly Chatbot</h1>
+        <button
+          className="doodly-send"
+          style={{ position: "absolute", right: 24, top: "25%", fontSize: 18 }}
+          onClick={quitChat}
+        >
+          Quit
+        </button>
+      </header>
+      <main className="doodly-chat" style={{
+        flex: 1,
+        overflowY: "auto",
+        marginTop: 72,
+        marginBottom: 90,
+        padding: 16,
+        display: "flex",
+        flexDirection: "column",
+        minHeight: 0,
+      }}>
+        {messages.map((msg, idx) => {
+          const isMe = msg.sender === socket.id;
+          return (
+            <div
+              key={idx}
+              className={`doodly-bubble ${isMe ? "me" : "partner"}`}
+              style={{
+                display: "flex",
+                alignSelf: isMe ? "flex-end" : "flex-start",
+                maxWidth: "100%",
+                wordBreak: "break-word",
+                whiteSpace: "pre-wrap",
+                overflowWrap: "break-word",
+                flexDirection: isMe ? "row-reverse" : "row",
+                alignItems: "center"
+              }}
+            >
+              <span className="doodly-avatar" style={{ fontSize: 24, margin: isMe ? "0 0 0 8px" : "0 8px 0 0" }}>
+                {isMe ? "😁" : "🤖❓"}
+              </span>
+              <div className="doodly-text">{msg.text}</div>
+            </div>
+          );
+        })}
+        <div ref={chatEndRef} />
+        {/* Conversation complete or disconnected message at the end of chat */}
+        {conversationComplete && (
+          <div style={{ textAlign: "center", padding: 16, color: "#888", width: "100%" }}>
+            — Conversation complete —
+            <br />
+            <button
+              className="doodly-send"
+              style={{ marginTop: 10 }}
+              onClick={quitChat}
+            >
+              Start Over
+            </button>
+          </div>
+        )}
+        {status === "disconnected" && !conversationComplete && (
+          <div style={{ textAlign: "center", padding: 16, color: "#e88", width: "100%" }}>
+            — Your partner disconnected —
+            <br />
+            <button
+              className="doodly-send"
+              style={{ marginTop: 10 }}
+              onClick={resetToEntry}
+            >
+              Restart
+            </button>
+          </div>
+        )}
+      </main>
+      <footer className="doodly-footer" style={{
+        position: "fixed",
+        left: 0,
+        bottom: 0,
+        width: "100%",
+        background: "#16171d",
+        borderTop: "1px solid #eee",
+        zIndex: 2,
+        padding: 12,
+        display: "flex",
+        gap: 8,
+        alignItems: "center"
+      }}>
+        <input
+          className="doodly-input"
+          type="text"
+          placeholder={inputPlaceholder}
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={handleKeyDown}
+          disabled={!canSend || status === "disconnected" || conversationComplete}
+          style={{ flex: 1, fontSize: 18, padding: 8 }}
+        />
+        <button
+          className="doodly-send"
+          onClick={sendMessage}
+          disabled={!canSend || status === "disconnected" || conversationComplete}
+          style={{ fontSize: 18, padding: "8px 18px", marginRight: "20px"}}
+        >
+          Send
+        </button>
+      </footer>
+    </div>
+  );
+}
+
+export default App;
+
+
+
+
+
+
+
+
+
+
+
+import { useCallback, useEffect, useRef, useState } from "react";
+import { io, Socket } from "socket.io-client";
+import { GoogleGenAI } from "@google/genai";
+
+const socket: Socket = io("http://localhost:3001");
+const client = new GoogleGenAI({ apiKey: process.env.PUBLIC_GOOGLE_GENAI_API_KEY });
+
+type Message = { sender: string; text: string };
+type Role = "Human" | "FakeAI" | "RealAI";
+
+function App() {
+  const [turnCount, setTurnCount] = useState(0);
+  const [role, setRole] = useState<Role | null>(null);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [input, setInput] = useState("");
+  const [status, setStatus] = useState<
+    "entry" | "waiting" | "paired" | "disconnected"
+  >("entry");
+  const chatEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    socket.on("chat message", (msg: Message) => {
+      setMessages((prev) => [...prev, msg]);
+    });
+    socket.on("waiting", () => {
+      setStatus("waiting");
+    });
+    socket.on("paired", () => {
+      setStatus("paired");
+    });
+    socket.on("partner disconnected", () => {
+      setStatus("disconnected");
+    });
+    return () => {
+      socket.off("chat message");
+      socket.off("waiting");
+      socket.off("paired");
+      socket.off("partner disconnected");
+    };
+  }, []);
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  const chooseRole = (chosen: Role) => {
+    setRole(chosen);
+    // Mask the role for the server so it just pairs "Human" with "AI"
+    const serverRole = chosen === "Human" ? "Human" : "AI";
+    socket.emit("choose role", serverRole);
+  };
+
+  const sendMessage = () => {
+    if (input.trim() && turnCount < 1) { // Assuming 1 message per user per your footer logic
+      // 2. Mask the sender identity to the partner
+      const displaySender = role === "Human" ? "Human" : "AI";
+      const msg = { sender: displaySender, text: input };
+      
+      socket.emit("chat message", msg);
+      setInput("");
+      setTurnCount((prev) => prev + 1);
+    }
+  };
+
+  // Generate bot response
+  const GenerateBotResponse = useCallback(async (history: Message[]) => {
+    // Only fire if the client is explicitly running the Real API bot
+    if (role !== "RealAI") return;
+
+    const prompt = history.map((m) => `${m.sender}: ${m.text}`).join("\n") + "\nAI:";
+
+    try {
+      const response = await client.models.generateContent({
+        model: "gemini-3-flash-preview", 
+        contents: prompt,
+      });
+
+      // 3. Fix the response text extraction for the @google/genai SDK
+      const botText = response.text?.trim() || "";
+      if (!botText) return console.warn("No AI response generated");
+
+      const botMsg: Message = { sender: "AI", text: botText };
+      
+      // Update local state, emit to socket, and increment turn count
+      setMessages((prev) => [...prev, botMsg]);
+      socket.emit("chat message", botMsg);
+      setTurnCount((prev) => prev + 1); 
+      
+    } catch (err) {
+      console.error("Error generating AI response:", err);
+    }
+  }, [role]);
+
+  useEffect(() => {
+    const last = messages[messages.length - 1];
+    // Only auto-reply if we are the RealAI and the Human just spoke
+    if (role === "RealAI" && last?.sender === "Human") {
+      (async () => {
+        await GenerateBotResponse(messages);
+      })();
+    }
+  }, [messages, role, GenerateBotResponse]);
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") sendMessage();
+  };
+
+  const resetToEntry = () => {
+    setTurnCount(0);
+    socket.disconnect();
+    setRole(null);
+    setMessages([]);
+    setInput("");
+    setStatus("entry");
+    setTimeout(() => socket.connect(), 100);
+  };
+
+  const quitChat = () => {
+    resetToEntry();
+  };
+
+  if (status === "entry") {
+    return (
+      <div
+        className="doodly-app"
+        style={{
+          justifyContent: "center",
+          display: "flex",
+          minHeight: "100vh",
+        }}
+      >
+        <div style={{ textAlign: "center", width: "100%" }}>
+          <div className="doodly-button-wrapper">
+            <button
+              className="doodly-send"
+              style={{ margin: 12, fontSize: 22 }}
+              onClick={() => chooseRole("Human")}
+            >
+              Enter as Human
+            </button>
+            <button
+              className="doodly-send"
+              style={{ margin: 12, fontSize: 22 }}
+              onClick={() => chooseRole("FakeAI")}
+            >
+              Enter as Fake AI (Human Pretender)
+            </button>
+            <button
+              className="doodly-send"
+              style={{ margin: 12, fontSize: 22 }}
+              onClick={() => chooseRole("RealAI")}
+            >
+              Enter as Real AI (Bot)
+            </button>
+            <h1>Choose your role</h1>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (status === "waiting") {
+    return (
+      <div
+        className="doodly-app"
+        style={{
+          justifyContent: "center",
+          alignItems: "center",
+          display: "flex",
+          minHeight: "100vh",
+        }}
+      >
+        <div style={{ textAlign: "center", width: "100%" }}>
+          <h2>
+            Waiting for a partner to join as {role === "Human" ? "AI" : "Human"}...
+          </h2>
+          <button
+            className="doodly-send"
+            style={{ margin: 12, fontSize: 18 }}
+            onClick={resetToEntry}
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (status === "disconnected") {
+    return (
+      <div
+        className="doodly-app"
+        style={{
+          justifyContent: "center",
+          alignItems: "center",
+          display: "flex",
+          minHeight: "100vh",
+        }}
+      >
+        <div style={{ textAlign: "center", width: "100%" }}>
+          <h2>Your partner disconnected.</h2>
+          <button
+            className="doodly-send"
+            style={{ margin: 12, fontSize: 18 }}
+            onClick={resetToEntry}
+          >
+            Restart
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="doodly-app">
+      <header className="doodly-header" style={{ position: "relative" }}>
+        <h1>Doodly Chatbot</h1>
+        <button
+          className="doodly-send"
+          style={{ position: "absolute", right: 24, top: 24 }}
+          onClick={quitChat}
+        >
+          Quit
+        </button>
+      </header>
+      <main className="doodly-chat">
+        {messages.map((msg, idx) => {
+          // If you are FakeAI or RealAI, your actual role vs display role needs a quick check for styling
+          const isMe = 
+            (role === "Human" && msg.sender === "Human") || 
+            (role !== "Human" && msg.sender === "AI");
+
+          return (
+            <div
+              key={idx}
+              className={`doodly-bubble ${isMe ? "me" : "partner"} ${msg.sender === "AI" ? "ai" : "human"}`}
+              style={{ alignSelf: isMe ? "flex-end" : "flex-start" }}
+            >
+              <div className="doodly-avatar">
+                {msg.sender === "AI" ? "🤖" : "🙂"}
+              </div>
+              <div className="doodly-text">{msg.text}</div>
+            </div>
+          );
+        })}
+        <div ref={chatEndRef} />
+      </main>
+      <footer className="doodly-footer">
+        <input
+          className="doodly-input"
+          type="text"
+          placeholder={
+            role === "RealAI" 
+              ? "AI is thinking..." 
+              : turnCount >= 1 ? "You've sent your message" : `Type as ${role === "FakeAI" ? "AI" : role}...`
+          }
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={handleKeyDown}
+          // 4. Completely disable the input box if the Real AI bot is running
+          disabled={turnCount >= 1 || role === "RealAI"}
+        />
+        <button
+          className="doodly-send"
+          onClick={sendMessage}
+          disabled={turnCount >= 1 || role === "RealAI"}
+        >
+          Send
+        </button>
+        {messages.length >= 2 && (
+          <div style={{ textAlign: "center", padding: 16, color: "#888" }}>
+            — Conversation complete —
+            <br />
+            <button
+              className="doodly-send"
+              style={{ marginTop: 10 }}
+              onClick={quitChat}
+            >
+              Start Over
+            </button>
+          </div>
+        )}
+      </footer>
+    </div>
+  );
+}
+
+export default App;
