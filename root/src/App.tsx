@@ -1,11 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { io, Socket } from "socket.io-client";
-import { GoogleGenAI } from "@google/genai";
 
-// Initialize Gemini (assuming Vite based on your import.meta.env usage)
-const client = new GoogleGenAI({
-  apiKey: import.meta.env.VITE_GOOGLE_GENAI_API_KEY,
-});
 
 const socket: Socket =
   typeof window !== 'undefined'
@@ -104,28 +99,27 @@ function App() {
   };
 
   // --- RESTORED REAL AI BOT LOGIC ---
+  // RealAI: Ask Gemini via backend
   useEffect(() => {
     if (status === "paired" && role === "RealAI" && canSend) {
       const generateBotResponse = async () => {
         try {
           let prompt = "You are an AI chatting with a human. Say hello and start the conversation!";
           if (messages.length > 0) {
-             prompt = messages.map((m) => `${m.sender === socket.id ? "AI" : "Human"}: ${m.text}`).join("\n") + "\nAI:";
+            prompt = messages.map((m) => `${m.sender === socket.id ? "AI" : "Human"}: ${m.text}`).join("\n") + "\nAI:";
           }
-
-          const response = await client.models.generateContent({
-            model: "gemini-3-flash-preview",
-            contents: prompt,
+          const res = await fetch("/api/gemini", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ prompt }),
           });
-
-          const botText = response.text?.trim() || "Hmm...";
+          const data = await res.json();
+          const botText = data.text?.trim() || "Hmm...";
           socket.emit("chat message", { sender: socket.id, text: botText });
-          
         } catch (err) {
           console.error("AI Generation Error:", err);
         }
       };
-
       generateBotResponse();
     }
   }, [status, role, canSend, messages]);
