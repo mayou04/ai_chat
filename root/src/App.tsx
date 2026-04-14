@@ -104,10 +104,22 @@ function App() {
     if (status === "paired" && role === "RealAI" && canSend) {
       const generateBotResponse = async () => {
         try {
-          let prompt = "You are an AI chatting with a human. Say hello and start the conversation!";
+          // --- AI PROMPT CREATION ---
+          // Define your custom prompts for starting and continuing the conversation:
+          const startPrompt =
+            "You are an AI chatting with a human, but you are trying to act as a human. Use casual language and gen-z slang to make them think you are human. Start the conversation with a friendly opener, maybe ask a fun question or mention something random. Don't type too long, and depending on the length, take more time to send the message.";
+          const continuePrompt =
+            "You are an AI chatting with a human, but you are trying to act as a human. Use casual language and gen-z slang to make them think you are human. Continue the conversation with a friendly opener, maybe ask a fun question or mention something random. Don't type too long, and depending on the length, take more time to send the message.";
+
+          let prompt = startPrompt;
+          // If there is chat history, build a prompt from the conversation so far and use the continuePrompt as instruction.
           if (messages.length > 0) {
-            prompt = messages.map((m) => `${m.sender === socket.id ? "AI" : "Human"}: ${m.text}`).join("\n") + "\nAI:";
+            const history = messages
+              .map((m) => `${m.sender === socket.id ? "AI" : "Human"}: ${m.text}`)
+              .join("\n");
+            prompt = `${continuePrompt}\n\n${history}\nAI:`;
           }
+          // --- END AI PROMPT CREATION ---
           const res = await fetch("/api/gemini", {
             method: "POST",
             headers: { "Content-Type": "application/json" },

@@ -5,5 +5,8 @@ import { defineConfig } from "vite";
 export default defineConfig({
   server: {
     allowedHosts: true,
+    proxy: {
+      '/api': 'http://localhost:3001',
+    },
   },
 });
