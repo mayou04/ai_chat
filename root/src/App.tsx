@@ -1,4 +1,14 @@
 import { useEffect, useRef, useState } from "react";
+// Helper to call Gemini API
+async function askGemini(prompt: string): Promise<string> {
+  const res = await fetch('/api/gemini', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prompt }),
+  });
+  const data = await res.json();
+  return data.text || 'No response from Gemini.';
+}
 import { io, Socket } from "socket.io-client";
 
 const socket: Socket =
@@ -13,6 +23,8 @@ const socket: Socket =
 type Message = { sender: string; text: string };
 
 function App() {
+    const [aiMode, setAiMode] = useState(false); // If true, chat with Gemini AI
+    const [aiLoading, setAiLoading] = useState(false);
   const [myMsgCount, setMyMsgCount] = useState(0); // Msgs sent by this client
   const [partnerMsgCount, setPartnerMsgCount] = useState(0); // Msgs sent by partner client
   const [messages, setMessages] = useState<Message[]>([]);
@@ -63,12 +75,22 @@ function App() {
 
 
   // Join chat handler
+
   const joinChat = () => {
     setShowLoading(true);
     joinTimeout.current = window.setTimeout(() => {
       socket.emit("join chat");
       joinTimeout.current = null;
-    }, 5000); // 5 second artificial delay
+    }, 5000);
+  };
+
+  const startAiChat = () => {
+    setAiMode(true);
+    setStatus("paired");
+    setMessages([]);
+    setMyMsgCount(0);
+    setPartnerMsgCount(0);
+    setFirstTurnId("me"); // Always user's turn
   };
 
   const cancelJoin = () => {
@@ -84,22 +106,34 @@ function App() {
   // - input is not empty
   // - myMsgCount < 5
   // - my turn (see below)
-  const sendMessage = () => {
+  const sendMessage = async () => {
     const lastMsg = messages[messages.length - 1];
-    const isFirst = firstTurnId === socket.id;
-    // Only the chosen starter can send the very first message
+    const isFirst = aiMode ? true : firstTurnId === socket.id;
     const isFirstMessage = myMsgCount === 0 && partnerMsgCount === 0;
-    // After the first message, alternate turns: you can send if you've sent less or equal messages than your partner
-    const isMyTurn = (isFirstMessage && isFirst) || (!isFirstMessage && myMsgCount <= partnerMsgCount);
+    const isMyTurn = aiMode ? true : (isFirstMessage && isFirst) || (!isFirstMessage && myMsgCount <= partnerMsgCount);
     if (
       input.trim() &&
       myMsgCount < 5 &&
       isMyTurn &&
-      (!lastMsg || lastMsg.sender !== socket.id)
+      (!lastMsg || lastMsg.sender !== (aiMode ? "me" : socket.id))
     ) {
-      const msg = { sender: socket.id, text: input };
-      socket.emit("chat message", msg);
+      const msg = { sender: aiMode ? "me" : (socket.id ?? ""), text: input };
+      setMessages((prev) => [...prev, msg]);
+      setMyMsgCount((prev) => prev + 1);
       setInput("");
+      if (aiMode) {
+        setAiLoading(true);
+        try {
+          const aiText = await askGemini(input);
+          setMessages((prev) => [...prev, { sender: "gemini", text: aiText }]);
+          setPartnerMsgCount((prev) => prev + 1);
+        } catch {
+          setMessages((prev) => [...prev, { sender: "gemini", text: "[Error: Gemini API failed]" }]);
+        }
+        setAiLoading(false);
+      } else {
+        socket.emit("chat message", msg);
+      }
     }
   };
 
@@ -151,14 +185,22 @@ function App() {
               </button>
             </div>
           ) : (
-            <div className="doodly-button-wrapper">
+            <div className="doodly-button-wrapper" style={{ textAlign: "center" }}>
               <h1>Join the chat</h1>
               <button
                 className="doodly-send"
                 style={{ margin: 12, fontSize: 22 }}
                 onClick={joinChat}
               >
-                Join Chat
+                Chat with a Person
+              </button>
+              <div style={{ margin: 12 }}>or</div>
+              <button
+                className="doodly-send"
+                style={{ margin: 12, fontSize: 22, background: '#4b8', color: '#fff' }}
+                onClick={startAiChat}
+              >
+                Chat with Gemini AI
               </button>
             </div>
           )}
@@ -175,26 +217,32 @@ function App() {
   const quitChat = () => {
     setMyMsgCount(0);
     setPartnerMsgCount(0);
-    socket.disconnect();
     setMessages([]);
     setInput("");
     setStatus("entry");
-    setTimeout(() => socket.connect(), 100); // reconnect after state reset
+    setAiMode(false);
+    setAiLoading(false);
+    setFirstTurnId(null);
+    if (!aiMode) {
+      socket.disconnect();
+      setTimeout(() => socket.connect(), 100);
+    }
   };
 
   const conversationComplete = myMsgCount >= 5 && partnerMsgCount >= 5;
 
+
   const lastMsg = messages[messages.length - 1];
   // Determine if it's my turn:
-  const isFirst = firstTurnId === socket.id;
-
+  const isFirst = aiMode ? true : firstTurnId === socket.id;
   const isFirstMessage = myMsgCount === 0 && partnerMsgCount === 0;
-  const isMyTurn = (isFirstMessage && isFirst) || (!isFirstMessage && myMsgCount <= partnerMsgCount);
+  const isMyTurn = aiMode ? true : (isFirstMessage && isFirst) || (!isFirstMessage && myMsgCount <= partnerMsgCount);
   const canSend =
     !conversationComplete &&
     myMsgCount < 5 &&
     isMyTurn &&
-    (!lastMsg || lastMsg.sender !== socket.id);
+    (!lastMsg || lastMsg.sender !== (aiMode ? "me" : socket.id)) &&
+    (!aiLoading);
 
   let inputPlaceholder = "";
   if (conversationComplete) inputPlaceholder = "Conversation complete";
@@ -243,11 +291,17 @@ function App() {
         minHeight: 0,
       }}>
         {messages.map((msg, idx) => {
-          const isMe = msg.sender === socket.id;
+          let isMe = false, isAi = false;
+          if (aiMode) {
+            isMe = msg.sender === "me";
+            isAi = msg.sender === "gemini";
+          } else {
+            isMe = msg.sender === socket.id;
+          }
           return (
             <div
               key={idx}
-              className={`doodly-bubble ${isMe ? "me" : "partner"}`}
+              className={`doodly-bubble ${isMe ? "me" : isAi ? "partner" : "partner"}`}
               style={{
                 display: "flex",
                 alignSelf: isMe ? "flex-end" : "flex-start",
@@ -260,12 +314,17 @@ function App() {
               }}
             >
               <span className="doodly-avatar" style={{ fontSize: 24, margin: isMe ? "0 0 0 8px" : "0 8px 0 0" }}>
-                {isMe ? "😁" : "🤖❓"}
+                {isMe ? "😁" : isAi ? "🤖 Gemini" : "🤖❓"}
               </span>
               <div className="doodly-text">{msg.text}</div>
             </div>
           );
         })}
+        {aiLoading && (
+          <div style={{ textAlign: "left", color: "#888", margin: "8px 0 8px 8px" }}>
+            <span style={{ fontSize: 18 }}>🤖 Gemini is typing...</span>
+          </div>
+        )}
         <div ref={chatEndRef} />
         {/* Conversation complete or disconnected message at the end of chat */}
         {conversationComplete && (

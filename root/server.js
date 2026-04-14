@@ -1,14 +1,19 @@
+
 import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import axios from 'axios';
+import dotenv from 'dotenv';
+dotenv.config();
 
 const app = express();
 const server = createServer(app);
 const io = new Server(server, {
   cors: { origin: '*' }
 });
+const apiKey = process.env.GEMINI_API_KEY;
 
 // Set Content Security Policy header for all responses
 app.use((req, res, next) => {
@@ -90,4 +95,40 @@ io.on('connection', (socket) => {
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {
   console.log(`Socket.io server running on http://localhost:${PORT}`);
+});
+
+app.use(express.json());
+
+app.post('/api/gemini', async (req, res) => {
+  const prompt = req.body.prompt;
+  if (!apiKey) {
+    return res.status(500).json({ error: 'Gemini API key not set on server.' });
+  }
+  try {
+    const geminiRes = await axios.post(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`,
+      { contents: [{ parts: [{ text: prompt }] }] }
+    );
+    const text = geminiRes.data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    res.json({ text });
+  } catch (err) {
+    console.error('Gemini API error:', err?.response?.data || err);
+    res.status(500).json({ error: 'Gemini API error' });
+  }
+});
+
+// Endpoint to list available Gemini models for debugging
+app.get('/api/gemini-models', async (req, res) => {
+  if (!apiKey) {
+    return res.status(500).json({ error: 'Gemini API key not set on server.' });
+  }
+  try {
+    const response = await axios.get(
+      `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`
+    );
+    res.json(response.data);
+  } catch (err) {
+    console.error('Gemini ListModels error:', err?.response?.data || err);
+    res.status(500).json({ error: 'Failed to list Gemini models.' });
+  }
 });
