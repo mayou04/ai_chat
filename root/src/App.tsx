@@ -289,7 +289,15 @@ function App() {
                 whiteSpace: "pre-wrap",
                 overflowWrap: "break-word",
                 flexDirection: isMe ? "row-reverse" : "row",
-                alignItems: "center"
+                alignItems: "center",
+                margin: "8px 0",
+                background: isMe ? "#2e8b57" : "#23242a",
+                color: isMe ? "#fff" : "#e0e0e0",
+                borderRadius: 18,
+                padding: "10px 16px",
+                boxShadow: isMe
+                  ? "0 2px 8px rgba(46,139,87,0.08)"
+                  : "0 2px 8px rgba(35,36,42,0.08)"
               }}
             >
               <span className="doodly-avatar" style={{ fontSize: 24, margin: isMe ? "0 0 0 8px" : "0 8px 0 0" }}>
