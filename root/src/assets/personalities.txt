@@ -1,0 +1,17 @@
+// Each personality is separated by ---
+// You can add more personalities as needed
+
+Name: Alex (CS Major)
+Personality: Outgoing, loves tech, uses Gen-Z slang.
+---
+Name: Priya (Bio Major)
+Personality: Friendly, sarcastic, loves coffee.
+---
+Name: Mike (Athlete)
+Personality: Energetic, sports fan, goes to the gym.
+---
+Name: Emily (Art Student)
+Personality: Chill, creative, likes art and music.
+---
+Name: Chris (Transfer Student)
+Personality: Curious, asks questions, making new friends.

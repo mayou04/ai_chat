@@ -1,4 +1,15 @@
 import { useEffect, useRef, useState } from "react";
+  // List available Gemini models
+  const listModels = async () => {
+    try {
+      const res = await fetch("/api/gemini-listmodels");
+      const data = await res.json();
+      alert(JSON.stringify(data, null, 2));
+    } catch (err) {
+      alert("Failed to fetch models: " + err);
+    }
+  };
+import personalitiesRaw from "./assets/personalities.txt?raw";
 import { io, Socket } from "socket.io-client";
 
 
@@ -14,8 +25,33 @@ const socket: Socket =
 type Message = { sender: string; text: string };
 type Role = "Human" | "FakeAI" | "RealAI";
 
+// Parse personalities from the text file
+function parsePersonalities(raw: string) {
+  return raw
+    .split(/---+/)
+    .map((block) => {
+      const nameMatch = block.match(/Name:\s*(.*)/);
+      const personalityMatch = block.match(/Personality:\s*([\s\S]*)/);
+      if (nameMatch && personalityMatch) {
+        return {
+          name: nameMatch[1].trim(),
+          personality: personalityMatch[1].trim(),
+        };
+      }
+      return null;
+    })
+    .filter(Boolean);
+}
+
+const personalities = parsePersonalities(personalitiesRaw);
+
+function getRandomPersonality() {
+  return personalities[Math.floor(Math.random() * personalities.length)];
+}
+
 function App() {
   const [role, setRole] = useState<Role | null>(null); // Restored role state
+  const [aiPersonality, setAiPersonality] = useState<any>(null);
   const [myMsgCount, setMyMsgCount] = useState(0); 
   const [partnerMsgCount, setPartnerMsgCount] = useState(0); 
   const [messages, setMessages] = useState<Message[]>([]);
@@ -71,7 +107,12 @@ function App() {
   const joinChat = (selectedRole: Role) => {
     setRole(selectedRole);
     setStatus("waiting");
-    
+    // If joining as RealAI, pick a random personality
+    if (selectedRole === "RealAI") {
+      setAiPersonality(getRandomPersonality());
+    } else {
+      setAiPersonality(null);
+    }
     // Mask the role for the server
     const serverRole = selectedRole === "Human" ? "Human" : "AI";
     socket.emit("choose role", serverRole);
@@ -101,23 +142,21 @@ function App() {
   // --- RESTORED REAL AI BOT LOGIC ---
   // RealAI: Ask Gemini via backend
   useEffect(() => {
-    if (status === "paired" && role === "RealAI" && canSend) {
+    if (status === "paired" && role === "RealAI" && canSend && aiPersonality) {
       const generateBotResponse = async () => {
         try {
           // --- AI PROMPT CREATION ---
-          // Define your custom prompts for starting and continuing the conversation:
-          const startPrompt =
-            "You are an AI chatting with a human, but you are trying to act as a human. Use casual language and gen-z slang to make them think you are human. Start the conversation with a friendly opener, maybe ask a fun question or mention something random. Don't type too long, and depending on the length, take more time to send the message.";
-          const continuePrompt =
-            "You are an AI chatting with a human, but you are trying to act as a human. Use casual language and gen-z slang to make them think you are human. Continue the conversation with a friendly opener, maybe ask a fun question or mention something random. Don't type too long, and depending on the length, take more time to send the message.";
+          // Use the selected personality for the AI
+          const basePrompt =
+            `You are a Stony Brook University student named ${aiPersonality.name}. Your personality: ${aiPersonality.personality}. Respond realistically and concisely, like a real college student. Do not write long answers. You can make up details about your life, but be consistent with them throughout the conversation.`;
 
-          let prompt = startPrompt;
-          // If there is chat history, build a prompt from the conversation so far and use the continuePrompt as instruction.
+          let prompt = basePrompt;
+          // If there is chat history, build a prompt from the conversation so far and use the same instruction.
           if (messages.length > 0) {
             const history = messages
-              .map((m) => `${m.sender === socket.id ? "AI" : "Human"}: ${m.text}`)
+              .map((m) => `${m.sender === socket.id ? aiPersonality.name : "Partner"}: ${m.text}`)
               .join("\n");
-            prompt = `${continuePrompt}\n\n${history}\nAI:`;
+            prompt = `${basePrompt}\n\n${history}\n${aiPersonality.name}:`;
           }
           // --- END AI PROMPT CREATION ---
           const res = await fetch("/api/gemini", {
@@ -134,7 +173,7 @@ function App() {
       };
       generateBotResponse();
     }
-  }, [status, role, canSend, messages]);
+  }, [status, role, canSend, messages, aiPersonality]);
   // ----------------------------------
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -207,6 +246,13 @@ function App() {
               onClick={() => joinChat("RealAI")}
             >
               Join as Real AI Bot
+            </button>
+            <button
+              className="doodly-send"
+              style={{ margin: 12, fontSize: 16, width: "100%", background: "#444", color: "#fff" }}
+              onClick={listModels}
+            >
+              List Gemini Models
             </button>
           </div>
         </div>
