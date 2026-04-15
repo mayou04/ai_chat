@@ -166,7 +166,11 @@ function App() {
           });
           const data = await res.json();
           const botText = data.text?.trim() || "Hmm...";
-          socket.emit("chat message", { sender: socket.id, text: botText });
+          // Simulate typing delay based on message length (e.g., 40ms per character, min 500ms, max 3000ms)
+          const delay = Math.min(Math.max(botText.length * 40, 500), 3000);
+          setTimeout(() => {
+            socket.emit("chat message", { sender: socket.id, text: botText });
+          }, delay);
         } catch (err) {
           console.error("AI Generation Error:", err);
         }
