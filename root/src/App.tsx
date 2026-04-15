@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+  // Typing indicator timeout in ms
+  const TYPING_TIMEOUT = 1500;
   // List available Gemini models
   const listModels = async () => {
     try {
@@ -60,12 +62,17 @@ function App() {
     "entry" | "waiting" | "paired" | "disconnected"
   >("entry");
   const [firstTurnId, setFirstTurnId] = useState<string | null>(null); 
+  const [partnerTyping, setPartnerTyping] = useState(false);
+  const [aiTyping, setAiTyping] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const joinTimeout = useRef<number | null>(null); // Restored to prevent cleanup errors
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     socket.on("chat message", (msg: Message) => {
       setMessages((prev) => [...prev, msg]);
+      setPartnerTyping(false); // Stop typing indicator when message received
+      setAiTyping(false);
       if (msg.sender === socket.id) {
         setMyMsgCount((prev) => prev + 1);
       } else {
@@ -90,12 +97,20 @@ function App() {
       setStatus("disconnected");
     });
 
+    socket.on("typing", () => {
+      setPartnerTyping(true);
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      typingTimeoutRef.current = setTimeout(() => setPartnerTyping(false), TYPING_TIMEOUT);
+    });
+
     return () => {
       socket.off("chat message");
       socket.off("waiting");
       socket.off("paired");
       socket.off("partner disconnected");
+      socket.off("typing");
       if (joinTimeout.current) clearTimeout(joinTimeout.current);
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     };
   }, []);
 
@@ -139,6 +154,14 @@ function App() {
     }
   };
 
+  // Emit typing event when user types
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setInput(e.target.value);
+    if (role !== "RealAI" && status === "paired") {
+      socket.emit("typing");
+    }
+  };
+
   // --- RESTORED REAL AI BOT LOGIC ---
   // RealAI: Ask Gemini via backend
   useEffect(() => {
@@ -159,6 +182,7 @@ function App() {
             prompt = `${basePrompt}\n\n${history}\n${aiPersonality.name}:`;
           }
           // --- END AI PROMPT CREATION ---
+          setAiTyping(true);
           const res = await fetch("/api/gemini", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -169,9 +193,11 @@ function App() {
           // Simulate typing delay based on message length (e.g., 40ms per character, min 500ms, max 3000ms)
           const delay = Math.min(Math.max(botText.length * 40, 500), 3000);
           setTimeout(() => {
+            setAiTyping(false);
             socket.emit("chat message", { sender: socket.id, text: botText });
           }, delay);
         } catch (err) {
+          setAiTyping(false);
           console.error("AI Generation Error:", err);
         }
       };
@@ -404,7 +430,7 @@ function App() {
           type="text"
           placeholder={inputPlaceholder}
           value={input}
-          onChange={(e) => setInput(e.target.value)}
+          onChange={handleInputChange}
           onKeyDown={handleKeyDown}
           // Disabled if it's the RealAI so the user can't type for the bot
           disabled={!canSend || status === "disconnected" || conversationComplete || role === "RealAI"}
@@ -418,6 +444,11 @@ function App() {
         >
           Send
         </button>
+        {(partnerTyping || aiTyping) && (
+          <span style={{ color: "#aaa", fontStyle: "italic", marginLeft: 8, fontSize: 16 }}>
+            {aiTyping ? "AI is typing..." : "Partner is typing..."}
+          </span>
+        )}
       </footer>
     </div>
   );
