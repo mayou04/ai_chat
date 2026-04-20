@@ -120,7 +120,7 @@ app.post('/api/gemini', async (req, res) => {
     return res.status(500).json({ error: 'Gemini API key not set on server.' });
   }
   try {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${apiKey}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemma-4-31b-it:generateContent?key=${apiKey}`;
     console.log('[Gemini] Requesting:', url);
     console.log('[Gemini] Prompt:', prompt);
     const geminiRes = await axios.post(
