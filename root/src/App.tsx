@@ -61,9 +61,11 @@ function App() {
         setPartnerMsgCount((prev) => prev + 1);
       }
     });
-    // Removed 'waiting' event handler
+    // Add 'waiting' event handler
+    socket.on("waiting", () => {
+      setStatus("waiting");
+    });
     socket.on("paired", (data) => {
-      setShowLoading(false);
       setStatus("paired");
       setMyMsgCount(0);
       setPartnerMsgCount(0);
@@ -80,6 +82,7 @@ function App() {
 
     return () => {
       socket.off("chat message");
+      socket.off("waiting");
       socket.off("paired");
       socket.off("partner disconnected");
       if (joinTimeout.current) clearTimeout(joinTimeout.current);
