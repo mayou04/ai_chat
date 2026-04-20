@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import personalitiesRaw from "./assets/personalities.txt?raw";
 import { io, Socket } from "socket.io-client";
 
-
 const socket: Socket =
   typeof window !== 'undefined'
     ? io(
@@ -47,7 +46,7 @@ function App() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [status, setStatus] = useState<
-    "entry" | "paired" | "disconnected"
+    "entry" | "paired" | "disconnected" | "waiting"
   >("entry");
   const [firstTurnId, setFirstTurnId] = useState<string | null>(null); 
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -224,13 +223,6 @@ function App() {
               onClick={() => joinChat("Human")}
             >
               Join as Human
-            </button>
-            <button
-              className="doodly-send"
-              style={{ margin: 12, fontSize: 22, width: "100%" }}
-              onClick={() => joinChat("FakeAI")}
-            >
-              Join as Fake AI
             </button>
             <button
               className="doodly-send"
