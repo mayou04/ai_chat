@@ -15,26 +15,6 @@ const io = new Server(server, {
 });
 const apiKey = process.env.GEMINI_API_KEY;
 
-// Endpoint to list available Gemini models
-app.get('/api/gemini-listmodels', async (req, res) => {
-  const apiKey = process.env.GEMINI_API_KEY;
-  res.setHeader('Content-Type', 'application/json');
-  if (!apiKey) {
-    return res.status(500).json({ error: 'Gemini API key not set on server.' });
-  }
-  try {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`;
-    const response = await axios.get(url, { responseType: 'json' });
-    res.status(200).json(response.data);
-  } catch (err) {
-    if (err.response && err.response.data) {
-      res.status(500).json({ error: 'Gemini API error', details: err.response.data });
-    } else {
-      res.status(500).json({ error: 'Gemini API error', details: String(err) });
-    }
-  }
-});
-
 // Set Content Security Policy header for all responses
 app.use((req, res, next) => {
   res.setHeader(
@@ -165,21 +145,5 @@ app.post('/api/gemini', async (req, res) => {
   } catch (err) {
     console.error('Gemini API error:', err?.response?.data || err);
     res.status(500).json({ error: 'Gemini API error' });
-  }
-});
-
-// Endpoint to list available Gemini models for debugging
-app.get('/api/gemini-models', async (req, res) => {
-  if (!apiKey) {
-    return res.status(500).json({ error: 'Gemini API key not set on server.' });
-  }
-  try {
-    const response = await axios.get(
-      `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`
-    );
-    res.json(response.data);
-  } catch (err) {
-    console.error('Gemini ListModels error:', err?.response?.data || err);
-    res.status(500).json({ error: 'Failed to list Gemini models.' });
   }
 });

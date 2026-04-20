@@ -1,14 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-  // List available Gemini models
-  const listModels = async () => {
-    try {
-      const res = await fetch("/api/gemini-listmodels");
-      const data = await res.json();
-      alert(JSON.stringify(data, null, 2));
-    } catch (err) {
-      alert("Failed to fetch models: " + err);
-    }
-  };
 import personalitiesRaw from "./assets/personalities.txt?raw";
 import { io, Socket } from "socket.io-client";
 
@@ -248,13 +238,6 @@ function App() {
               onClick={() => joinChat("RealAI")}
             >
               Join as Real AI Bot
-            </button>
-            <button
-              className="doodly-send"
-              style={{ margin: 12, fontSize: 16, width: "100%", background: "#444", color: "#fff" }}
-              onClick={listModels}
-            >
-              List Gemini Models
             </button>
           </div>
         </div>
