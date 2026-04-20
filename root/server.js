@@ -15,6 +15,26 @@ const io = new Server(server, {
 });
 const apiKey = process.env.GEMINI_API_KEY;
 
+// Endpoint to list available Gemini models
+app.get('/api/gemini-listmodels', async (req, res) => {
+  const apiKey = process.env.GEMINI_API_KEY;
+  res.setHeader('Content-Type', 'application/json');
+  if (!apiKey) {
+    return res.status(500).json({ error: 'Gemini API key not set on server.' });
+  }
+  try {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`;
+    const response = await axios.get(url, { responseType: 'json' });
+    res.status(200).json(response.data);
+  } catch (err) {
+    if (err.response && err.response.data) {
+      res.status(500).json({ error: 'Gemini API error', details: err.response.data });
+    } else {
+      res.status(500).json({ error: 'Gemini API error', details: String(err) });
+    }
+  }
+});
+
 // Set Content Security Policy header for all responses
 app.use((req, res, next) => {
   res.setHeader(
@@ -90,6 +110,37 @@ io.on('connection', (socket) => {
     }
     pairs.delete(socket.id);
   });
+});
+
+// Gemini AI API endpoint for RealAI bot
+app.use(express.json());
+app.post('/api/gemini', async (req, res) => {
+  const prompt = req.body.prompt;
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    console.error('[Gemini] API key missing');
+    return res.status(500).json({ error: 'Gemini API key not set on server.' });
+  }
+  try {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemma-4-31b-it:generateContent?key=${apiKey}`;
+    console.log('[Gemini] Requesting:', url);
+    console.log('[Gemini] Prompt:', prompt);
+    const geminiRes = await axios.post(
+      url,
+      { contents: [{ parts: [{ text: prompt }] }] }
+    );
+    console.log('[Gemini] Response:', JSON.stringify(geminiRes.data));
+    const text = geminiRes.data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    res.json({ text });
+  } catch (err) {
+    if (err.response) {
+      console.error('[Gemini] API error response:', err.response.status, err.response.data);
+      res.status(500).json({ error: 'Gemini API error', details: err.response.data });
+    } else {
+      console.error('[Gemini] API error:', err);
+      res.status(500).json({ error: 'Gemini API error', details: String(err) });
+    }
+  }
 });
 
 const PORT = process.env.PORT || 3001;

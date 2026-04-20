@@ -1,15 +1,17 @@
 import { useEffect, useRef, useState } from "react";
-// Helper to call Gemini API
-async function askGemini(prompt: string): Promise<string> {
-  const res = await fetch('/api/gemini', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ prompt }),
-  });
-  const data = await res.json();
-  return data.text || 'No response from Gemini.';
-}
+  // List available Gemini models
+  const listModels = async () => {
+    try {
+      const res = await fetch("/api/gemini-listmodels");
+      const data = await res.json();
+      alert(JSON.stringify(data, null, 2));
+    } catch (err) {
+      alert("Failed to fetch models: " + err);
+    }
+  };
+import personalitiesRaw from "./assets/personalities.txt?raw";
 import { io, Socket } from "socket.io-client";
+
 
 const socket: Socket =
   typeof window !== 'undefined'
@@ -21,21 +23,45 @@ const socket: Socket =
     : ({} as Socket);
 
 type Message = { sender: string; text: string };
+type Role = "Human" | "FakeAI" | "RealAI";
+
+// Parse personalities from the text file
+function parsePersonalities(raw: string) {
+  return raw
+    .split(/---+/)
+    .map((block) => {
+      const nameMatch = block.match(/Name:\s*(.*)/);
+      const personalityMatch = block.match(/Personality:\s*([\s\S]*)/);
+      if (nameMatch && personalityMatch) {
+        return {
+          name: nameMatch[1].trim(),
+          personality: personalityMatch[1].trim(),
+        };
+      }
+      return null;
+    })
+    .filter(Boolean);
+}
+
+const personalities = parsePersonalities(personalitiesRaw);
+
+function getRandomPersonality() {
+  return personalities[Math.floor(Math.random() * personalities.length)];
+}
 
 function App() {
-    const [aiMode, setAiMode] = useState(false); // If true, chat with Gemini AI
-    const [aiLoading, setAiLoading] = useState(false);
-  const [myMsgCount, setMyMsgCount] = useState(0); // Msgs sent by this client
-  const [partnerMsgCount, setPartnerMsgCount] = useState(0); // Msgs sent by partner client
+  const [role, setRole] = useState<Role | null>(null); // Restored role state
+  const [aiPersonality, setAiPersonality] = useState<any>(null);
+  const [myMsgCount, setMyMsgCount] = useState(0); 
+  const [partnerMsgCount, setPartnerMsgCount] = useState(0); 
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [status, setStatus] = useState<
     "entry" | "paired" | "disconnected"
   >("entry");
-  const joinTimeout = useRef<number | null>(null);
-  const [firstTurnId, setFirstTurnId] = useState<string | null>(null); // Who starts
-  const [showLoading, setShowLoading] = useState(false); // Loading screen for finding partner
+  const [firstTurnId, setFirstTurnId] = useState<string | null>(null); 
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const joinTimeout = useRef<number | null>(null); // Restored to prevent cleanup errors
 
   useEffect(() => {
     socket.on("chat message", (msg: Message) => {
@@ -58,9 +84,11 @@ function App() {
         setFirstTurnId(null);
       }
     });
+
     socket.on("partner disconnected", () => {
       setStatus("disconnected");
     });
+
     return () => {
       socket.off("chat message");
       socket.off("paired");
@@ -73,69 +101,82 @@ function App() {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-
-  // Join chat handler
-
-  const joinChat = () => {
-    setShowLoading(true);
-    joinTimeout.current = window.setTimeout(() => {
-      socket.emit("join chat");
-      joinTimeout.current = null;
-    }, 5000);
-  };
-
-  const startAiChat = () => {
-    setAiMode(true);
-    setStatus("paired");
-    setMessages([]);
-    setMyMsgCount(0);
-    setPartnerMsgCount(0);
-    setFirstTurnId("me"); // Always user's turn
-  };
-
-  const cancelJoin = () => {
-    setShowLoading(false);
-    setStatus("entry");
-    if (joinTimeout.current) {
-      clearTimeout(joinTimeout.current);
-      joinTimeout.current = null;
+  // Restored Role Selection for Join Chat
+  const joinChat = (selectedRole: Role) => {
+    setRole(selectedRole);
+    setStatus("waiting");
+    // If joining as RealAI, pick a random personality
+    if (selectedRole === "RealAI") {
+      setAiPersonality(getRandomPersonality());
+    } else {
+      setAiPersonality(null);
     }
+    // Mask the role for the server
+    const serverRole = selectedRole === "Human" ? "Human" : "AI";
+    socket.emit("choose role", serverRole);
+    socket.emit("join chat"); // Preserved in case main branch's server requires it
   };
 
-  // Only allow sending if:
-  // - input is not empty
-  // - myMsgCount < 5
-  // - my turn (see below)
-  const sendMessage = async () => {
-    const lastMsg = messages[messages.length - 1];
-    const isFirst = aiMode ? true : firstTurnId === socket.id;
-    const isFirstMessage = myMsgCount === 0 && partnerMsgCount === 0;
-    const isMyTurn = aiMode ? true : (isFirstMessage && isFirst) || (!isFirstMessage && myMsgCount <= partnerMsgCount);
-    if (
-      input.trim() &&
-      myMsgCount < 5 &&
-      isMyTurn &&
-      (!lastMsg || lastMsg.sender !== (aiMode ? "me" : socket.id))
-    ) {
-      const msg = { sender: aiMode ? "me" : (socket.id ?? ""), text: input };
-      setMessages((prev) => [...prev, msg]);
-      setMyMsgCount((prev) => prev + 1);
+  const conversationComplete = myMsgCount >= 5 && partnerMsgCount >= 5;
+  const lastMsg = messages[messages.length - 1];
+  const isFirst = firstTurnId === socket.id;
+  const isFirstMessage = myMsgCount === 0 && partnerMsgCount === 0;
+  const isMyTurn = (isFirstMessage && isFirst) || (!isFirstMessage && myMsgCount <= partnerMsgCount);
+
+  const canSend =
+    !conversationComplete &&
+    myMsgCount < 5 &&
+    isMyTurn &&
+    (!lastMsg || lastMsg.sender !== socket.id);
+
+  const sendMessage = () => {
+    if (input.trim() && canSend) {
+      const msg = { sender: socket.id, text: input };
+      socket.emit("chat message", msg);
       setInput("");
-      if (aiMode) {
-        setAiLoading(true);
-        try {
-          const aiText = await askGemini(input);
-          setMessages((prev) => [...prev, { sender: "gemini", text: aiText }]);
-          setPartnerMsgCount((prev) => prev + 1);
-        } catch {
-          setMessages((prev) => [...prev, { sender: "gemini", text: "[Error: Gemini API failed]" }]);
-        }
-        setAiLoading(false);
-      } else {
-        socket.emit("chat message", msg);
-      }
     }
   };
+
+  // --- RESTORED REAL AI BOT LOGIC ---
+  // RealAI: Ask Gemini via backend
+  useEffect(() => {
+    if (status === "paired" && role === "RealAI" && canSend && aiPersonality) {
+      const generateBotResponse = async () => {
+        try {
+          // --- AI PROMPT CREATION ---
+          // Use the selected personality for the AI
+          const basePrompt =
+            `You are a Stony Brook University student named ${aiPersonality.name}. Your personality: ${aiPersonality.personality}. Respond like a real college student chatting online: keep it casual, use internet slang and abbreviations, but do NOT use emojis. Don't worry about perfect spelling or grammar. Keep replies short, chill, and don't give too many details.`;
+
+          let prompt = basePrompt;
+          // If there is chat history, build a prompt from the conversation so far and use the same instruction.
+          if (messages.length > 0) {
+            const history = messages
+              .map((m) => `${m.sender === socket.id ? aiPersonality.name : "Partner"}: ${m.text}`)
+              .join("\n");
+            prompt = `${basePrompt}\n\n${history}\n${aiPersonality.name}:`;
+          }
+          // --- END AI PROMPT CREATION ---
+          const res = await fetch("/api/gemini", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ prompt }),
+          });
+          const data = await res.json();
+          const botText = data.text?.trim() || "Hmm...";
+          // Simulate typing delay based on message length (e.g., 40ms per character, min 500ms, max 3000ms)
+          const delay = Math.min(Math.max(botText.length * 40, 500), 3000);
+          setTimeout(() => {
+            socket.emit("chat message", { sender: socket.id, text: botText });
+          }, delay);
+        } catch (err) {
+          console.error("AI Generation Error:", err);
+        }
+      };
+      generateBotResponse();
+    }
+  }, [status, role, canSend, messages, aiPersonality]);
+  // ----------------------------------
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") sendMessage();
@@ -148,11 +189,27 @@ function App() {
     setMessages([]);
     setInput("");
     setStatus("entry");
+    setRole(null);
     setTimeout(() => socket.connect(), 100);
     setFirstTurnId(null);
   };
 
-  if (status === "entry" || showLoading) {
+  const quitChat = () => {
+    resetToEntry();
+  };
+
+  let inputPlaceholder = "";
+  if (conversationComplete) inputPlaceholder = "Conversation complete";
+  else if (myMsgCount >= 5) inputPlaceholder = "Message limit reached";
+  else if (role === "RealAI") inputPlaceholder = "AI is thinking...";
+  else if (isFirstMessage) {
+    if (firstTurnId === null) inputPlaceholder = "Waiting for pairing...";
+    else if (isFirst) inputPlaceholder = "You start! Type your message...";
+    else inputPlaceholder = "Wait for your partner to start...";
+  } else if (isMyTurn) inputPlaceholder = "Type your message...";
+  else inputPlaceholder = "Wait for partner's reply...";
+
+  if (status === "entry") {
     return (
       <div
         className="doodly-app"
@@ -168,42 +225,63 @@ function App() {
           display: "flex",
           minHeight: "100vh",
         }}>
-          {showLoading ? (
-            <div style={{ textAlign: "center" }}>
-              <div className="doodly-loading-spinner" style={{ margin: 24 }}>
-                <svg width="48" height="48" viewBox="0 0 48 48" style={{ animation: "spin 1s linear infinite" }}>
-                  <circle cx="24" cy="24" r="20" stroke="#888" strokeWidth="4" fill="none" strokeDasharray="100" strokeDashoffset="60" />
-                </svg>
-              </div>
-              <h2>Looking for a partner...</h2>
-              <button
-                className="doodly-send"
-                style={{ margin: 12, fontSize: 18 }}
-                onClick={cancelJoin}
-              >
-                Cancel
-              </button>
-            </div>
-          ) : (
-            <div className="doodly-button-wrapper" style={{ textAlign: "center" }}>
-              <h1>Join the chat</h1>
-              <button
-                className="doodly-send"
-                style={{ margin: 12, fontSize: 22 }}
-                onClick={joinChat}
-              >
-                Chat with a Person
-              </button>
-              <div style={{ margin: 12 }}>or</div>
-              <button
-                className="doodly-send"
-                style={{ margin: 12, fontSize: 22, background: '#4b8', color: '#fff' }}
-                onClick={startAiChat}
-              >
-                Chat with Gemini AI
-              </button>
-            </div>
-          )}
+          {/* Restored the 3 Role Buttons */}
+          <div className="doodly-button-wrapper" style={{ flexDirection: "column", alignItems: "center" }}>
+            <h1>Join the chat</h1>
+            <button
+              className="doodly-send"
+              style={{ margin: 12, fontSize: 22, width: "100%" }}
+              onClick={() => joinChat("Human")}
+            >
+              Join as Human
+            </button>
+            <button
+              className="doodly-send"
+              style={{ margin: 12, fontSize: 22, width: "100%" }}
+              onClick={() => joinChat("FakeAI")}
+            >
+              Join as Fake AI
+            </button>
+            <button
+              className="doodly-send"
+              style={{ margin: 12, fontSize: 22, width: "100%" }}
+              onClick={() => joinChat("RealAI")}
+            >
+              Join as Real AI Bot
+            </button>
+            <button
+              className="doodly-send"
+              style={{ margin: 12, fontSize: 16, width: "100%", background: "#444", color: "#fff" }}
+              onClick={listModels}
+            >
+              List Gemini Models
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (status === "waiting") {
+    return (
+      <div
+        className="doodly-app"
+        style={{
+          justifyContent: "center",
+          alignItems: "center",
+          display: "flex",
+          minHeight: "100vh",
+        }}
+      >
+        <div style={{ textAlign: "center", width: "100%" }}>
+          <h2>Waiting for a partner to join...</h2>
+          <button
+            className="doodly-send"
+            style={{ margin: 12, fontSize: 18 }}
+            onClick={resetToEntry}
+          >
+            Cancel
+          </button>
         </div>
         <style>{`
           @keyframes spin { 100% { transform: rotate(360deg); } }
@@ -211,48 +289,6 @@ function App() {
       </div>
     );
   }
-
-  // Removed 'waiting' state UI
-
-  const quitChat = () => {
-    setMyMsgCount(0);
-    setPartnerMsgCount(0);
-    setMessages([]);
-    setInput("");
-    setStatus("entry");
-    setAiMode(false);
-    setAiLoading(false);
-    setFirstTurnId(null);
-    if (!aiMode) {
-      socket.disconnect();
-      setTimeout(() => socket.connect(), 100);
-    }
-  };
-
-  const conversationComplete = myMsgCount >= 5 && partnerMsgCount >= 5;
-
-
-  const lastMsg = messages[messages.length - 1];
-  // Determine if it's my turn:
-  const isFirst = aiMode ? true : firstTurnId === socket.id;
-  const isFirstMessage = myMsgCount === 0 && partnerMsgCount === 0;
-  const isMyTurn = aiMode ? true : (isFirstMessage && isFirst) || (!isFirstMessage && myMsgCount <= partnerMsgCount);
-  const canSend =
-    !conversationComplete &&
-    myMsgCount < 5 &&
-    isMyTurn &&
-    (!lastMsg || lastMsg.sender !== (aiMode ? "me" : socket.id)) &&
-    (!aiLoading);
-
-  let inputPlaceholder = "";
-  if (conversationComplete) inputPlaceholder = "Conversation complete";
-  else if (myMsgCount >= 5) inputPlaceholder = "Message limit reached";
-  else if (isFirstMessage) {
-    if (firstTurnId === null) inputPlaceholder = "Waiting for pairing...";
-    else if (isFirst) inputPlaceholder = "You start! Type your message...";
-    else inputPlaceholder = "Wait for your partner to start...";
-  } else if (isMyTurn) inputPlaceholder = "Type your message...";
-  else inputPlaceholder = "Wait for partner's reply...";
 
   return (
     <div className="doodly-app" style={{
@@ -310,7 +346,15 @@ function App() {
                 whiteSpace: "pre-wrap",
                 overflowWrap: "break-word",
                 flexDirection: isMe ? "row-reverse" : "row",
-                alignItems: "center"
+                alignItems: "center",
+                margin: "8px 0",
+                background: isMe ? "#2e8b57" : "#23242a",
+                color: isMe ? "#fff" : "#e0e0e0",
+                borderRadius: 18,
+                padding: "10px 16px",
+                boxShadow: isMe
+                  ? "0 2px 8px rgba(46,139,87,0.08)"
+                  : "0 2px 8px rgba(35,36,42,0.08)"
               }}
             >
               <span className="doodly-avatar" style={{ fontSize: 24, margin: isMe ? "0 0 0 8px" : "0 8px 0 0" }}>
@@ -374,13 +418,14 @@ function App() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          disabled={!canSend || status === "disconnected" || conversationComplete}
+          // Disabled if it's the RealAI so the user can't type for the bot
+          disabled={!canSend || status === "disconnected" || conversationComplete || role === "RealAI"}
           style={{ flex: 1, fontSize: 18, padding: 8 }}
         />
         <button
           className="doodly-send"
           onClick={sendMessage}
-          disabled={!canSend || status === "disconnected" || conversationComplete}
+          disabled={!canSend || status === "disconnected" || conversationComplete || role === "RealAI"}
           style={{ fontSize: 18, padding: "8px 18px", marginRight: "20px"}}
         >
           Send
