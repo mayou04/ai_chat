@@ -52,6 +52,45 @@ function App() {
   const chatEndRef = useRef<HTMLDivElement>(null);
   const joinTimeout = useRef<number | null>(null); // Restored to prevent cleanup errors
 
+  // Restored Role Selection for Join Chat
+  const joinChat = (selectedRole: Role) => {
+    setRole(selectedRole);
+    setStatus("waiting");
+    // If joining as RealAI, pick a random personality
+    if (selectedRole === "RealAI") {
+      setAiPersonality(getRandomPersonality());
+    } else {
+      setAiPersonality(null);
+    }
+    // Mask the role for the server
+    const serverRole = selectedRole === "Human" ? "Human" : "AI";
+    socket.emit("choose role", serverRole);
+    socket.emit("join chat"); // Preserved in case main branch's server requires it
+  };
+
+  const conversationComplete = myMsgCount >= 5 && partnerMsgCount >= 5;
+  const [guess, setGuess] = useState<null | 'AI' | 'Human'>(null);
+  const [showResult, setShowResult] = useState(false);
+  const [truePartnerType, setTruePartnerType] = useState<'AI' | 'Human' | null>(null);
+  const lastMsg = messages[messages.length - 1];
+  const isFirst = firstTurnId === socket.id;
+  const isFirstMessage = myMsgCount === 0 && partnerMsgCount === 0;
+  const isMyTurn = (isFirstMessage && isFirst) || (!isFirstMessage && myMsgCount <= partnerMsgCount);
+
+  const canSend =
+    !conversationComplete &&
+    myMsgCount < 5 &&
+    isMyTurn &&
+    (!lastMsg || lastMsg.sender !== socket.id);
+
+  const sendMessage = () => {
+    if (input.trim() && canSend) {
+      const msg = { sender: socket.id, text: input };
+      socket.emit("chat message", msg);
+      setInput("");
+    }
+  };
+
   useEffect(() => {
     socket.on("chat message", (msg: Message) => {
       setMessages((prev) => [...prev, msg]);
@@ -73,6 +112,11 @@ function App() {
       } else {
         setFirstTurnId(null);
       }
+      if (data && data.partnerType) {
+        setTruePartnerType(data.partnerType === 'AI' ? 'AI' : 'Human');
+      } else {
+        setTruePartnerType(null);
+      }
     });
 
     socket.on("partner disconnected", () => {
@@ -92,45 +136,6 @@ function App() {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Restored Role Selection for Join Chat
-  const joinChat = (selectedRole: Role) => {
-    setRole(selectedRole);
-    setStatus("waiting");
-    // If joining as RealAI, pick a random personality
-    if (selectedRole === "RealAI") {
-      setAiPersonality(getRandomPersonality());
-    } else {
-      setAiPersonality(null);
-    }
-    // Mask the role for the server
-    const serverRole = selectedRole === "Human" ? "Human" : "AI";
-    socket.emit("choose role", serverRole);
-    socket.emit("join chat"); // Preserved in case main branch's server requires it
-  };
-
-  const conversationComplete = myMsgCount >= 5 && partnerMsgCount >= 5;
-  const [guess, setGuess] = useState<null | 'AI' | 'Human'>(null);
-  const [showResult, setShowResult] = useState(false);
-  const lastMsg = messages[messages.length - 1];
-  const isFirst = firstTurnId === socket.id;
-  const isFirstMessage = myMsgCount === 0 && partnerMsgCount === 0;
-  const isMyTurn = (isFirstMessage && isFirst) || (!isFirstMessage && myMsgCount <= partnerMsgCount);
-
-  const canSend =
-    !conversationComplete &&
-    myMsgCount < 5 &&
-    isMyTurn &&
-    (!lastMsg || lastMsg.sender !== socket.id);
-
-  const sendMessage = () => {
-    if (input.trim() && canSend) {
-      const msg = { sender: socket.id, text: input };
-      socket.emit("chat message", msg);
-      setInput("");
-    }
-  };
-
-  // --- RESTORED REAL AI BOT LOGIC ---
   // RealAI: Ask Gemini via backend
   useEffect(() => {
     if (status === "paired" && role === "RealAI" && canSend && aiPersonality) {
@@ -283,10 +288,10 @@ function App() {
     );
   }
 
-  let partnerType: 'AI' | 'Human' = 'Human';
-  if (role === 'Human') partnerType = 'AI';
-  if (role === 'RealAI') partnerType = 'Human';
-  // FakeAI is not handled here, but you can extend as needed
+  // let partnerType: 'AI' | 'Human' = 'Human';
+  // if (role === 'Human') partnerType = 'AI';
+  // if (role === 'RealAI') partnerType = 'Human';
+  // // FakeAI is not handled here, but you can extend as needed
 
   return (
     <div className="doodly-app" style={{
@@ -383,9 +388,9 @@ function App() {
             )}
             {showResult && guess && (
               <div style={{ margin: '16px 0', fontSize: 20 }}>
-                {guess === partnerType
-                  ? <span style={{ color: '#2e8b57' }}>✅ Correct! It was {partnerType === 'AI' ? 'an AI Bot' : 'a Real Human'}.</span>
-                  : <span style={{ color: '#e88' }}>❌ Nope! It was {partnerType === 'AI' ? 'an AI Bot' : 'a Real Human'}.</span>
+                {truePartnerType && guess === truePartnerType
+                  ? <span style={{ color: '#2e8b57' }}>✅ Correct! It was {truePartnerType === 'AI' ? 'an AI Bot' : 'a Real Human'}.</span>
+                  : <span style={{ color: '#e88' }}>❌ Nope! It was {truePartnerType === 'AI' ? 'an AI Bot' : 'a Real Human'}.</span>
                 }
                 <br />
                 <button

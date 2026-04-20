@@ -47,8 +47,14 @@ let waitingSocket = null;
 let waitingSince = null;
 let waitingTimeout = null;
 const pairs = new Map(); // socket.id -> partner's socket.id
+const socketRoles = new Map(); // socket.id -> 'Human' | 'AI'
 
 io.on('connection', (socket) => {
+    // Listen for role selection
+    socket.on('choose role', (role) => {
+      // role is 'Human' or 'AI' (from client masking)
+      socketRoles.set(socket.id, role);
+    });
   console.log('A user connected:', socket.id);
 
   // New generic join event with delay logic
@@ -68,9 +74,12 @@ io.on('connection', (socket) => {
         const firstIdx = Math.floor(Math.random() * 2);
         const firstId = sockets[firstIdx].id;
         const secondId = sockets[1 - firstIdx].id;
-        // Emit paired with info about who starts
-        sockets[0].emit('paired', { firstId });
-        sockets[1].emit('paired', { firstId });
+        // Get roles for both sockets
+        const roleA = socketRoles.get(sockets[0].id) || 'Unknown';
+        const roleB = socketRoles.get(sockets[1].id) || 'Unknown';
+        // Send each their partner's type
+        sockets[0].emit('paired', { firstId, partnerType: roleB });
+        sockets[1].emit('paired', { firstId, partnerType: roleA });
         waitingSocket = null;
         waitingSince = null;
         waitingTimeout = null;
@@ -114,6 +123,7 @@ io.on('connection', (socket) => {
       pairs.delete(partnerId);
     }
     pairs.delete(socket.id);
+    socketRoles.delete(socket.id);
   });
 });
 
