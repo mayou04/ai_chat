@@ -109,6 +109,8 @@ function App() {
   };
 
   const conversationComplete = myMsgCount >= 5 && partnerMsgCount >= 5;
+  const [guess, setGuess] = useState<null | 'AI' | 'Human'>(null);
+  const [showResult, setShowResult] = useState(false);
   const lastMsg = messages[messages.length - 1];
   const isFirst = firstTurnId === socket.id;
   const isFirstMessage = myMsgCount === 0 && partnerMsgCount === 0;
@@ -252,6 +254,20 @@ function App() {
       >
         <div style={{ textAlign: "center", width: "100%" }}>
           <h2>Waiting for a partner to join...</h2>
+          <div style={{ margin: '32px 0' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+              <div style={{
+                border: '6px solid #eee',
+                borderTop: '6px solid #2e8b57',
+                borderRadius: '50%',
+                width: 60,
+                height: 60,
+                animation: 'spin 1s linear infinite',
+                marginBottom: 16
+              }} />
+              <span style={{ color: '#888', fontSize: 18 }}>Finding a partner...</span>
+            </div>
+          </div>
           <button
             className="doodly-send"
             style={{ margin: 12, fontSize: 18 }}
@@ -260,9 +276,17 @@ function App() {
             Cancel
           </button>
         </div>
+        <style>{`
+          @keyframes spin { 100% { transform: rotate(360deg); } }
+        `}</style>
       </div>
     );
   }
+
+  let partnerType: 'AI' | 'Human' = 'Human';
+  if (role === 'Human') partnerType = 'AI';
+  if (role === 'RealAI') partnerType = 'Human';
+  // FakeAI is not handled here, but you can extend as needed
 
   return (
     <div className="doodly-app" style={{
@@ -338,13 +362,41 @@ function App() {
           <div style={{ textAlign: "center", padding: 16, color: "#888", width: "100%" }}>
             — Conversation complete —
             <br />
-            <button
-              className="doodly-send"
-              style={{ marginTop: 10 }}
-              onClick={quitChat}
-            >
-              Start Over
-            </button>
+            {!guess && !showResult && (
+              <>
+                <div style={{ margin: '16px 0' }}>Who do you think your partner was?</div>
+                <button
+                  className="doodly-send"
+                  style={{ margin: 8, fontSize: 18, minWidth: 120 }}
+                  onClick={() => { setGuess('Human'); setShowResult(true); }}
+                >
+                  Real Human
+                </button>
+                <button
+                  className="doodly-send"
+                  style={{ margin: 8, fontSize: 18, minWidth: 120 }}
+                  onClick={() => { setGuess('AI'); setShowResult(true); }}
+                >
+                  AI Bot
+                </button>
+              </>
+            )}
+            {showResult && guess && (
+              <div style={{ margin: '16px 0', fontSize: 20 }}>
+                {guess === partnerType
+                  ? <span style={{ color: '#2e8b57' }}>✅ Correct! It was {partnerType === 'AI' ? 'an AI Bot' : 'a Real Human'}.</span>
+                  : <span style={{ color: '#e88' }}>❌ Nope! It was {partnerType === 'AI' ? 'an AI Bot' : 'a Real Human'}.</span>
+                }
+                <br />
+                <button
+                  className="doodly-send"
+                  style={{ marginTop: 16 }}
+                  onClick={quitChat}
+                >
+                  Start Over
+                </button>
+              </div>
+            )}
           </div>
         )}
         {status === "disconnected" && !conversationComplete && (

@@ -44,28 +44,46 @@ if (process.env.NODE_ENV === 'production') {
 
 // Generic pairing logic
 let waitingSocket = null;
+let waitingSince = null;
+let waitingTimeout = null;
 const pairs = new Map(); // socket.id -> partner's socket.id
 
 io.on('connection', (socket) => {
   console.log('A user connected:', socket.id);
 
-  // New generic join event
+  // New generic join event with delay logic
   socket.on('join chat', () => {
     if (waitingSocket && waitingSocket.id !== socket.id) {
-      // Pair with waiting user
-      pairs.set(socket.id, waitingSocket.id);
-      pairs.set(waitingSocket.id, socket.id);
-      // Randomly choose who starts
-      const sockets = [socket, waitingSocket];
-      const firstIdx = Math.floor(Math.random() * 2);
-      const firstId = sockets[firstIdx].id;
-      const secondId = sockets[1 - firstIdx].id;
-      // Emit paired with info about who starts
-      sockets[0].emit('paired', { firstId });
-      sockets[1].emit('paired', { firstId });
-      waitingSocket = null;
+      // If the minimum wait time hasn't passed, delay pairing
+      const now = Date.now();
+      const minWait = 5000; // 5 seconds
+      const extraWait = Math.floor(Math.random() * 10000); // 0-10s extra
+      const elapsed = waitingSince ? now - waitingSince : 0;
+      const waitTime = Math.max(minWait - elapsed, 0) + extraWait;
+      const doPair = () => {
+        pairs.set(socket.id, waitingSocket.id);
+        pairs.set(waitingSocket.id, socket.id);
+        // Randomly choose who starts
+        const sockets = [socket, waitingSocket];
+        const firstIdx = Math.floor(Math.random() * 2);
+        const firstId = sockets[firstIdx].id;
+        const secondId = sockets[1 - firstIdx].id;
+        // Emit paired with info about who starts
+        sockets[0].emit('paired', { firstId });
+        sockets[1].emit('paired', { firstId });
+        waitingSocket = null;
+        waitingSince = null;
+        waitingTimeout = null;
+      };
+      if (waitTime > 0) {
+        if (waitingTimeout) clearTimeout(waitingTimeout);
+        waitingTimeout = setTimeout(doPair, waitTime);
+      } else {
+        doPair();
+      }
     } else {
       waitingSocket = socket;
+      waitingSince = Date.now();
       socket.emit('waiting');
     }
   });
@@ -81,7 +99,14 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => {
     console.log('User disconnected:', socket.id);
     // Remove from waiting
-    if (waitingSocket && waitingSocket.id === socket.id) waitingSocket = null;
+    if (waitingSocket && waitingSocket.id === socket.id) {
+      waitingSocket = null;
+      waitingSince = null;
+      if (waitingTimeout) {
+        clearTimeout(waitingTimeout);
+        waitingTimeout = null;
+      }
+    }
     // Remove pair
     const partnerId = pairs.get(socket.id);
     if (partnerId && io.sockets.sockets.get(partnerId)) {
