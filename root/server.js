@@ -110,8 +110,15 @@ app.post('/api/gemini', async (req, res) => {
       { contents: [{ parts: [{ text: prompt }] }] }
     );
     console.log('[Gemini] Response:', JSON.stringify(geminiRes.data));
-    const text = geminiRes.data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    res.json({ text });
+    // Extract only the last non-thought part as the reply
+    const parts = geminiRes.data?.candidates?.[0]?.content?.parts || [];
+    // Prefer the last part without thought:true, else fallback to last part
+    let reply = '';
+    if (parts.length > 0) {
+      const nonThoughtParts = parts.filter(p => !p.thought);
+      reply = (nonThoughtParts.length > 0 ? nonThoughtParts[nonThoughtParts.length - 1].text : parts[parts.length - 1].text) || '';
+    }
+    res.json({ text: reply });
   } catch (err) {
     if (err.response) {
       console.error('[Gemini] API error response:', err.response.status, err.response.data);

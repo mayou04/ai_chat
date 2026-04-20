@@ -137,7 +137,7 @@ function App() {
           // --- AI PROMPT CREATION ---
           // Use the selected personality for the AI
           const basePrompt =
-            `You are a Stony Brook University student named ${aiPersonality.name}. Your personality: ${aiPersonality.personality}. Respond like a real college student chatting online: keep it casual, use internet slang and abbreviations, but do NOT use emojis. Don't worry about perfect spelling or grammar. Keep replies short, chill, and don't give too many details.`;
+            `You are a Stony Brook University student named ${aiPersonality.name}. Your personality: ${aiPersonality.personality}. Respond like a real college student chatting online: keep it casual, use internet slang, but do NOT use emojis. Don't worry about perfect spelling or grammar. Keep replies short, chill, and don't give too many details.`;
 
           let prompt = basePrompt;
           // If there is chat history, build a prompt from the conversation so far and use the same instruction.
