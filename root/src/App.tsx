@@ -46,7 +46,7 @@ function App() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [status, setStatus] = useState<
-    "entry" | "paired" | "disconnected" | "waiting"
+    "entry" | "waiting" | "paired" | "disconnected"
   >("entry");
   const [firstTurnId, setFirstTurnId] = useState<string | null>(null); 
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -61,7 +61,6 @@ function App() {
         setPartnerMsgCount((prev) => prev + 1);
       }
     });
-    // Add 'waiting' event handler
     socket.on("waiting", () => {
       setStatus("waiting");
     });
@@ -261,9 +260,6 @@ function App() {
             Cancel
           </button>
         </div>
-        <style>{`
-          @keyframes spin { 100% { transform: rotate(360deg); } }
-        `}</style>
       </div>
     );
   }
@@ -305,17 +301,11 @@ function App() {
         minHeight: 0,
       }}>
         {messages.map((msg, idx) => {
-          let isMe = false, isAi = false;
-          if (aiMode) {
-            isMe = msg.sender === "me";
-            isAi = msg.sender === "gemini";
-          } else {
-            isMe = msg.sender === socket.id;
-          }
+          const isMe = msg.sender === socket.id;
           return (
             <div
               key={idx}
-              className={`doodly-bubble ${isMe ? "me" : isAi ? "partner" : "partner"}`}
+              className={`doodly-bubble ${isMe ? "me" : "partner"}`}
               style={{
                 display: "flex",
                 alignSelf: isMe ? "flex-end" : "flex-start",
@@ -336,17 +326,12 @@ function App() {
               }}
             >
               <span className="doodly-avatar" style={{ fontSize: 24, margin: isMe ? "0 0 0 8px" : "0 8px 0 0" }}>
-                {isMe ? "😁" : isAi ? "🤖 Gemini" : "🤖❓"}
+                {isMe ? "😁" : "🤖❓"}
               </span>
               <div className="doodly-text">{msg.text}</div>
             </div>
           );
         })}
-        {aiLoading && (
-          <div style={{ textAlign: "left", color: "#888", margin: "8px 0 8px 8px" }}>
-            <span style={{ fontSize: 18 }}>🤖 Gemini is typing...</span>
-          </div>
-        )}
         <div ref={chatEndRef} />
         {/* Conversation complete or disconnected message at the end of chat */}
         {conversationComplete && (
