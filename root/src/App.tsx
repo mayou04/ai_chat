@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import personalitiesRaw from "./assets/personalities.txt?raw";
+import promptTemplateRaw from "./assets/prompt.txt?raw";
 import { io, Socket } from "socket.io-client";
 
 const socket: Socket =
@@ -249,8 +250,10 @@ function App() {
     ) {
       const generateBotResponse = async () => {
         try {
-          const basePrompt = `You are a Stony Brook University student named ${aiPersonality.name}. Your personality: ${aiPersonality.personality}. Respond like a college student chatting online: keep it casual, use internet slang, but NO emojis. Replies should be short and chill.`;
-          let prompt = basePrompt;
+          // Load prompt from external file and replace placeholders
+          let prompt = promptTemplateRaw
+            .replace(/\$\{name\}/g, aiPersonality.name)
+            .replace(/\$\{personality\}/g, aiPersonality.personality);
 
           if (messages.length > 0) {
             const history = messages
@@ -259,10 +262,8 @@ function App() {
                   `${m.sender === (socket.id ?? "player") ? "Partner" : aiPersonality.name}: ${m.text}`,
               )
               .join("\n");
-            prompt = `${basePrompt}\n\n${history}\n${aiPersonality.name}:`;
-          } else {
-            // FIX: Be highly specific about the first message and anchor it with the AI's name
-            prompt = `${basePrompt}\n\nThis is the very first message of the chat. Send a brief, casual greeting to start things off. Do not ask if they are there.\n${aiPersonality.name}:`;
+            // Insert chat history before the AI's next reply
+            prompt = prompt.replace(/\n\nThis is the very first message[\s\S]*?\$\{name\}:/, `\n\n${history}\n${aiPersonality.name}:`);
           }
 
           const res = await fetch("/api/gemini", {
