@@ -250,20 +250,28 @@ function App() {
     ) {
       const generateBotResponse = async () => {
         try {
-          // Load prompt from external file and replace placeholders
-          let prompt = promptTemplateRaw
+          // Split prompt template into base and first-message instructions
+          const [basePromptRaw, firstMsgRaw = ""] = promptTemplateRaw.split(/\n\s*\n/);
+          const basePrompt = basePromptRaw
+            .replace(/\$\{name\}/g, aiPersonality.name)
+            .replace(/\$\{personality\}/g, aiPersonality.personality);
+          const firstMsg = firstMsgRaw
             .replace(/\$\{name\}/g, aiPersonality.name)
             .replace(/\$\{personality\}/g, aiPersonality.personality);
 
-          if (messages.length > 0) {
+          let prompt = basePrompt;
+          if (messages.length === 0) {
+            // Use first-message instructions if no chat history
+            prompt = `${basePrompt}\n\n${firstMsg}`;
+          } else {
+            // Build prompt with chat history
             const history = messages
               .map(
                 (m) =>
                   `${m.sender === (socket.id ?? "player") ? "Partner" : aiPersonality.name}: ${m.text}`,
               )
               .join("\n");
-            // Insert chat history before the AI's next reply
-            prompt = prompt.replace(/\n\nThis is the very first message[\s\S]*?\$\{name\}:/, `\n\n${history}\n${aiPersonality.name}:`);
+            prompt = `${basePrompt}\n\n${history}\n${aiPersonality.name}:`;
           }
 
           const res = await fetch("/api/gemini", {
