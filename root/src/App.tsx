@@ -13,7 +13,7 @@ const socket: Socket =
     : ({} as Socket);
 
 type Message = { sender: string; text: string };
-type Role = "Human" | "RealAI";
+// type Role = "Human" | "RealAI";
 
 function parsePersonalities(raw: string) {
   return raw
@@ -73,7 +73,7 @@ function useCountdown(active: boolean, seconds: number, onExpire: () => void) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function App() {
-  const [role, setRole] = useState<Role | null>(null);
+  // const [role, setRole] = useState<Role | null>(null);
   const [aiPersonality, setAiPersonality] = useState<any>(null);
   const [myMsgCount, setMyMsgCount] = useState(0);
   const [partnerMsgCount, setPartnerMsgCount] = useState(0);
@@ -139,12 +139,12 @@ function App() {
     setFirstTurnId(botFirstId);
     setTruePartnerType("AI");
 
-    setRole("Human");
+    // setRole("Human");
     setAiPersonality(getRandomPersonality());
   };
 
   const joinChat = () => {
-    setRole("Human");
+    // setRole("Human");
     setStatus("waiting");
     setAiPersonality(null);
 
@@ -186,7 +186,7 @@ function App() {
     setMessages([]);
     setInput("");
     setStatus("entry");
-    setRole(null);
+    // setRole(null);
     setGuess(null);
     setShowResult(false);
     setTimeout(() => socket.connect(), 100);
@@ -215,7 +215,7 @@ function App() {
       const partnerIsAI = data?.partnerType === "AI";
       setTruePartnerType(partnerIsAI ? "AI" : "Human");
 
-      setRole("Human");
+      // setRole("Human");
 
       if (partnerIsAI) {
         setAiPersonality(getRandomPersonality());
