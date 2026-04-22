@@ -124,7 +124,7 @@ function App() {
     setInput("");
   };
 
-  const timeLeft = useCountdown(timerActive, 10, handleTimerExpire);
+  const timeLeft = useCountdown(timerActive, 20, handleTimerExpire);
 
   const handleForceAiPairing = () => {
     // Disconnect so the server removes us from the queue
