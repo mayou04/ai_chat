@@ -147,18 +147,34 @@ function App() {
     setStatus("waiting");
     setAiPersonality(null);
 
-    // Server relies on this to map human queues!
-    socket.emit("choose role", "Human");
-    socket.emit("join chat");
+    // ── 50/50 Coin Flip ──
+    const isDestinedForAI = Math.random() < 0.5;
 
     if (joinTimeout.current) clearTimeout(joinTimeout.current);
 
-    // Increased wait to 15 seconds
-    joinTimeout.current = window.setTimeout(() => {
-      handleForceAiPairing();
-    }, 15000);
-  };
+    if (isDestinedForAI) {
+      // --- PATH A: 50% Chance for AI ---
+      // We DO NOT tell the server we are looking for a partner.
+      // Instead, we fake a "searching" delay (between 2 to 5 seconds)
+      // so it feels like real matchmaking, then force the AI.
+      const fakeMatchmakingTime = Math.floor(Math.random() * 3000) + 2000;
 
+      joinTimeout.current = window.setTimeout(() => {
+        handleForceAiPairing();
+      }, fakeMatchmakingTime);
+    } else {
+      // --- PATH B: 50% Chance for Human ---
+      // Tell the server we want to enter the human matchmaking queue
+      socket.emit("choose role", "Human");
+      socket.emit("join chat");
+
+      // Give the server 15 seconds to find a human.
+      // If it fails, fallback to the AI.
+      joinTimeout.current = window.setTimeout(() => {
+        handleForceAiPairing();
+      }, 15000);
+    }
+  };
   const sendMessage = () => {
     if (input.trim() && canSend) {
       const myMsg = { sender: socket.id ?? "player", text: input };
@@ -352,6 +368,10 @@ function App() {
                 fontSize: 22,
                 width: "100%",
                 padding: "14px 32px",
+                color: "black",
+                borderRadius: 90,
+                borderColor: "white",
+                backgroundColor: "lightgray",
               }}
               onClick={joinChat}
             >
@@ -403,7 +423,13 @@ function App() {
           </div>
           <button
             className="doodly-send"
-            style={{ margin: 12, fontSize: 18 }}
+            style={{
+              margin: 12,
+              fontSize: 18,
+              borderRadius: 90,
+              color: "black",
+              backgroundColor: "lightgray",
+            }}
             onClick={resetToEntry}
           >
             Cancel
@@ -462,7 +488,15 @@ function App() {
         )}
         <button
           className="doodly-send"
-          style={{ position: "absolute", right: 24, top: "25%", fontSize: 18 }}
+          style={{
+            position: "absolute",
+            right: 24,
+            top: "25%",
+            fontSize: 18,
+            color: "black",
+            borderColor: "white",
+            backgroundColor: "lightgray",
+          }}
           onClick={resetToEntry}
         >
           Quit
@@ -536,7 +570,14 @@ function App() {
                 </div>
                 <button
                   className="doodly-send"
-                  style={{ margin: 8, fontSize: 18, minWidth: 120 }}
+                  style={{
+                    margin: 8,
+                    fontSize: 18,
+                    minWidth: 120,
+                    color: "black",
+                    borderColor: "white",
+                    backgroundColor: "lightgray",
+                  }}
                   onClick={() => {
                     setGuess("Human");
                     setShowResult(true);
@@ -546,7 +587,14 @@ function App() {
                 </button>
                 <button
                   className="doodly-send"
-                  style={{ margin: 8, fontSize: 18, minWidth: 120 }}
+                  style={{
+                    margin: 8,
+                    fontSize: 18,
+                    minWidth: 120,
+                    color: "black",
+                    borderColor: "white",
+                    backgroundColor: "lightgray",
+                  }}
                   onClick={() => {
                     setGuess("AI");
                     setShowResult(true);
@@ -572,7 +620,12 @@ function App() {
                 <br />
                 <button
                   className="doodly-send"
-                  style={{ marginTop: 16 }}
+                  style={{
+                    marginTop: 16,
+                    color: "black",
+                    borderColor: "white",
+                    backgroundColor: "lightgray",
+                  }}
                   onClick={resetToEntry}
                 >
                   Start Over
@@ -594,7 +647,12 @@ function App() {
             — Your partner disconnected —<br />
             <button
               className="doodly-send"
-              style={{ marginTop: 10 }}
+              style={{
+                marginTop: 10,
+                color: "black",
+                borderColor: "white",
+                backgroundColor: "lightgray",
+              }}
               onClick={resetToEntry}
             >
               Restart
@@ -637,7 +695,14 @@ function App() {
           disabled={
             !canSend || status === "disconnected" || conversationComplete
           }
-          style={{ fontSize: 18, padding: "8px 18px", marginRight: "20px" }}
+          style={{
+            fontSize: 18,
+            padding: "8px 18px",
+            marginRight: "20px",
+            color: "black",
+            borderColor: "white",
+            backgroundColor: "lightgray",
+          }}
         >
           Send
         </button>
