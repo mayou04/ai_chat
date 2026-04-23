@@ -365,7 +365,7 @@ function App() {
             signal: controller.signal,
           });
           const data = await res.json();
-          const botText = data.text?.trim() || "hey";
+          const botText = data.text?.trim() || "(Timed out)";
           const typingDelay = Math.min(Math.max(botText.length * 40, 500), 8500);
 
           const elapsedMs = Date.now() - startedAt;
