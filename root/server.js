@@ -142,7 +142,17 @@ app.post('/api/gemini', async (req, res) => {
     console.log('[Gemini] Prompt:', prompt);
     const geminiRes = await axios.post(
       url,
-      { contents: [{ parts: [{ text: prompt }] }] }
+      {
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          maxOutputTokens: 80,
+          temperature: 1.0,
+          topP: 0.95,
+        },
+      },
+      {
+        timeout: 19000,
+      }
     );
     console.log('[Gemini] Response:', JSON.stringify(geminiRes.data));
     // Extract only the last non-thought part as the reply
@@ -155,12 +165,33 @@ app.post('/api/gemini', async (req, res) => {
     }
     res.json({ text: reply });
   } catch (err) {
+    let errorMsg = 'Unknown Gemini API error.';
+    let errorCode = 500;
+    let errorType = 'GENERIC';
     if (err.response) {
-      console.error('[Gemini] API error response:', err.response.status, err.response.data);
-      res.status(500).json({ error: 'Gemini API error', details: err.response.data });
+      errorCode = err.response.status;
+      if (err.response.data && err.response.data.error) {
+        errorType = err.response.data.error.status || 'API_ERROR';
+        errorMsg = err.response.data.error.message || JSON.stringify(err.response.data);
+      } else {
+        errorMsg = JSON.stringify(err.response.data);
+      }
+      console.error('[Gemini] API error response:', errorCode, errorType, errorMsg);
+      res.status(errorCode).json({ error: 'Gemini API error', code: errorCode, type: errorType, message: errorMsg });
+    } else if (err.code === 'ETIMEDOUT') {
+      errorType = 'TIMEOUT';
+      errorMsg = 'Request to Gemini API timed out.';
+      console.error('[Gemini] API timeout:', errorMsg);
+      res.status(504).json({ error: 'Gemini API timeout', code: 504, type: errorType, message: errorMsg });
+    } else if (err.code === 'ECONNRESET') {
+      errorType = 'CONNECTION_RESET';
+      errorMsg = 'Connection to Gemini API was reset.';
+      console.error('[Gemini] API connection reset:', errorMsg);
+      res.status(502).json({ error: 'Gemini API connection reset', code: 502, type: errorType, message: errorMsg });
     } else {
-      console.error('[Gemini] API error:', err);
-      res.status(500).json({ error: 'Gemini API error', details: String(err) });
+      errorMsg = String(err);
+      console.error('[Gemini] API error:', errorMsg);
+      res.status(500).json({ error: 'Gemini API error', code: 500, type: errorType, message: errorMsg });
     }
   }
 });
@@ -168,24 +199,4 @@ app.post('/api/gemini', async (req, res) => {
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {
   console.log(`Socket.io server running on http://localhost:${PORT}`);
-});
-
-app.use(express.json());
-
-app.post('/api/gemini', async (req, res) => {
-  const prompt = req.body.prompt;
-  if (!apiKey) {
-    return res.status(500).json({ error: 'Gemini API key not set on server.' });
-  }
-  try {
-    const geminiRes = await axios.post(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`,
-      { contents: [{ parts: [{ text: prompt }] }] }
-    );
-    const text = geminiRes.data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    res.json({ text });
-  } catch (err) {
-    console.error('Gemini API error:', err?.response?.data || err);
-    res.status(500).json({ error: 'Gemini API error' });
-  }
 });
