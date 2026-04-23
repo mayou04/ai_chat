@@ -143,7 +143,7 @@ function App() {
   const handleTimerExpire = () => {
     const myMsg = {
       sender: socket.id ?? "player",
-      text: input, // send whatever is in the input bar, even if empty
+      text: "(Timed out)", // send whatever is in the input bar, even if empty
     };
 
     socket.emit("chat message", myMsg);
@@ -165,7 +165,7 @@ function App() {
       aiAbortRef.current = null;
     }
 
-    const botMsg = { sender: "bot", text: "(AI timed out)" };
+    const botMsg = { sender: "bot", text: "(Timed out)" };
     socket.emit("chat message", botMsg);
     setMessages((prev) => [...prev, botMsg]);
     setPartnerMsgCount((p) => p + 1);
@@ -394,7 +394,7 @@ function App() {
 
           const errorMsg = {
             sender: "bot",
-            text: "(AI error)",
+            text: "(Timed out)",
           };
           socket.emit("chat message", errorMsg);
           setMessages((prev) => [...prev, errorMsg]);
