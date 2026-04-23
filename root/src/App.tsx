@@ -15,21 +15,21 @@ const socket: Socket =
 type Message = { sender: string; text: string };
 // type Role = "Human" | "RealAI";
 
-function parsePersonalities(raw: string) {
+type Personality = { personality: string };
+
+function parsePersonalities(raw: string): Personality[] {
   return raw
     .split(/---+/)
     .map((block) => {
-      const nameMatch = block.match(/Name:\s*(.*)/);
       const personalityMatch = block.match(/Personality:\s*([\s\S]*)/);
-      if (nameMatch && personalityMatch) {
+      if (personalityMatch) {
         return {
-          name: nameMatch[1].trim(),
           personality: personalityMatch[1].trim(),
         };
       }
       return null;
     })
-    .filter(Boolean);
+    .filter((p): p is Personality => Boolean(p));
 }
 
 const personalities = parsePersonalities(personalitiesRaw);
@@ -42,15 +42,22 @@ function useCountdown(active: boolean, seconds: number, onExpire: () => void) {
   const [timeLeft, setTimeLeft] = useState(seconds);
   const onExpireRef = useRef(onExpire);
   const firedRef = useRef(false);
-  onExpireRef.current = onExpire;
 
   useEffect(() => {
+    onExpireRef.current = onExpire;
+  }, [onExpire]);
+
+  useEffect(() => {
+    let resetTimeout: number | null = null;
     if (!active) {
-      setTimeLeft(seconds);
+      resetTimeout = window.setTimeout(() => setTimeLeft(seconds), 0);
       firedRef.current = false;
-      return;
+      return () => {
+        if (resetTimeout !== null) window.clearTimeout(resetTimeout);
+      };
     }
-    setTimeLeft(seconds);
+
+    resetTimeout = window.setTimeout(() => setTimeLeft(seconds), 0);
     firedRef.current = false;
     const interval = setInterval(() => {
       setTimeLeft((prev) => {
@@ -65,7 +72,10 @@ function useCountdown(active: boolean, seconds: number, onExpire: () => void) {
         return prev - 1;
       });
     }, 1000);
-    return () => clearInterval(interval);
+    return () => {
+      if (resetTimeout !== null) window.clearTimeout(resetTimeout);
+      clearInterval(interval);
+    };
   }, [active, seconds]);
 
   return timeLeft;
@@ -74,7 +84,7 @@ function useCountdown(active: boolean, seconds: number, onExpire: () => void) {
 
 function App() {
   // const [role, setRole] = useState<Role | null>(null);
-  const [aiPersonality, setAiPersonality] = useState<any>(null);
+  const [aiPersonality, setAiPersonality] = useState<Personality | null>(null);
   const [myMsgCount, setMyMsgCount] = useState(0);
   const [partnerMsgCount, setPartnerMsgCount] = useState(0);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -90,6 +100,9 @@ function App() {
   );
   const joinTimeout = useRef<number | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
+
+  const TURN_SECONDS = 20;
+  const SESSION_SECONDS = 240;
 
   const conversationComplete = myMsgCount >= 5 && partnerMsgCount >= 5;
   const lastMsg = messages[messages.length - 1];
@@ -108,10 +121,29 @@ function App() {
 
   const timerActive = status === "paired" && canSend && !conversationComplete;
 
+  const aiTurnActive =
+    status === "paired" &&
+    truePartnerType === "AI" &&
+    !conversationComplete &&
+    !isMyTurn;
+
+  const sessionActive = status === "paired" && !conversationComplete;
+
+  const aiAbortRef = useRef<AbortController | null>(null);
+  const aiTurnNonceRef = useRef(0);
+  const aiTurnRespondedRef = useRef(false);
+
+  const formatMmSs = (totalSeconds: number) => {
+    const clamped = Math.max(0, Math.floor(totalSeconds));
+    const m = Math.floor(clamped / 60);
+    const s = clamped % 60;
+    return `${m}:${String(s).padStart(2, "0")}`;
+  };
+
   const handleTimerExpire = () => {
     const myMsg = {
       sender: socket.id ?? "player",
-      text: "⏰ (time ran out)",
+      text: input, // send whatever is in the input bar, even if empty
     };
 
     socket.emit("chat message", myMsg);
@@ -124,7 +156,40 @@ function App() {
     setInput("");
   };
 
-  const timeLeft = useCountdown(timerActive, 20, handleTimerExpire);
+  const handleAiTimerExpire = () => {
+    if (aiTurnRespondedRef.current) return;
+    aiTurnRespondedRef.current = true;
+
+    if (aiAbortRef.current) {
+      aiAbortRef.current.abort();
+      aiAbortRef.current = null;
+    }
+
+    const botMsg = { sender: "bot", text: "(AI timed out)" };
+    socket.emit("chat message", botMsg);
+    setMessages((prev) => [...prev, botMsg]);
+    setPartnerMsgCount((p) => p + 1);
+  };
+
+  const handleSessionExpire = () => {
+    if (aiAbortRef.current) {
+      aiAbortRef.current.abort();
+      aiAbortRef.current = null;
+    }
+
+    const sysMsg = { sender: "system", text: "⏳ Time limit reached" };
+    setMessages((prev) => [...prev, sysMsg]);
+    setMyMsgCount(5);
+    setPartnerMsgCount(5);
+    setInput("");
+  };
+
+  const myTurnTimeLeft = useCountdown(timerActive, TURN_SECONDS, handleTimerExpire);
+  const aiTurnTimeLeft = useCountdown(aiTurnActive, TURN_SECONDS, handleAiTimerExpire);
+  const sessionTimeLeft = useCountdown(sessionActive, SESSION_SECONDS, handleSessionExpire);
+
+  const turnTimeLeft = timerActive ? myTurnTimeLeft : aiTurnTimeLeft;
+  const showAnyTurnTimer = timerActive || aiTurnActive;
 
   const handleForceAiPairing = () => {
     // Disconnect so the server removes us from the queue
@@ -239,6 +304,22 @@ function App() {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  useEffect(() => {
+    if (!aiTurnActive) {
+      if (aiAbortRef.current) {
+        aiAbortRef.current.abort();
+        aiAbortRef.current = null;
+      }
+      return;
+    }
+
+    // New AI turn
+    aiTurnNonceRef.current += 1;
+    aiTurnRespondedRef.current = false;
+    if (aiAbortRef.current) aiAbortRef.current.abort();
+    aiAbortRef.current = new AbortController();
+  }, [aiTurnActive]);
+
   // ── RealAI auto-response logic ───────────────────────────────────────────
   useEffect(() => {
     if (
@@ -250,40 +331,55 @@ function App() {
     ) {
       const generateBotResponse = async () => {
         try {
+          const turnNonce = aiTurnNonceRef.current;
+          const startedAt = Date.now();
+          const controller = aiAbortRef.current ?? new AbortController();
+          aiAbortRef.current = controller;
+
+          const hardTimeout = window.setTimeout(() => {
+            controller.abort();
+          }, TURN_SECONDS * 1000);
+
           // Split prompt template into base and first-message instructions
           const [basePromptRaw, firstMsgRaw = ""] = promptTemplateRaw.split(/\n\s*\n/);
-          const basePrompt = basePromptRaw
-            .replace(/\$\{name\}/g, aiPersonality.name)
-            .replace(/\$\{personality\}/g, aiPersonality.personality);
-          const firstMsg = firstMsgRaw
-            .replace(/\$\{name\}/g, aiPersonality.name)
-            .replace(/\$\{personality\}/g, aiPersonality.personality);
+          const basePrompt = basePromptRaw.replace(/\$\{personality\}/g, aiPersonality.personality);
+          const firstMsg = firstMsgRaw.replace(/\$\{personality\}/g, aiPersonality.personality);
 
           let prompt = basePrompt;
           if (messages.length === 0) {
             // Use first-message instructions if no chat history
             prompt = `${basePrompt}\n\n${firstMsg}`;
           } else {
-            // Build prompt with chat history
             const history = messages
               .map(
-                (m) =>
-                  `${m.sender === (socket.id ?? "player") ? "Partner" : aiPersonality.name}: ${m.text}`,
+                (m) => `${m.sender === (socket.id ?? "player") ? "Partner" : "AI"}: ${m.text}`
               )
               .join("\n");
-            prompt = `${basePrompt}\n\n${history}\n${aiPersonality.name}:`;
+            prompt = `${basePrompt}\n\n${history}\nAI:`;
           }
 
           const res = await fetch("/api/gemini", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ prompt }),
+            signal: controller.signal,
           });
           const data = await res.json();
           const botText = data.text?.trim() || "hey";
-          const delay = Math.min(Math.max(botText.length * 40, 500), 8500);
+          const typingDelay = Math.min(Math.max(botText.length * 40, 500), 8500);
+
+          const elapsedMs = Date.now() - startedAt;
+          const remainingMs = Math.max(0, TURN_SECONDS * 1000 - elapsedMs - 50);
+          const delay = Math.min(typingDelay, remainingMs);
+
+          window.clearTimeout(hardTimeout);
 
           setTimeout(() => {
+            // If we already timed out / turn changed, do nothing
+            if (aiTurnNonceRef.current !== turnNonce) return;
+            if (aiTurnRespondedRef.current) return;
+            aiTurnRespondedRef.current = true;
+
             const botMsg = { sender: "bot", text: botText };
             socket.emit("chat message", botMsg);
 
@@ -292,15 +388,17 @@ function App() {
           }, delay);
         } catch (err) {
           console.error("AI Generation Error:", err);
-          setTimeout(() => {
-            const errorMsg = {
-              sender: "bot",
-              text: "my wifi is acting up lol",
-            };
-            socket.emit("chat message", errorMsg);
-            setMessages((prev) => [...prev, errorMsg]);
-            setPartnerMsgCount((p) => p + 1);
-          }, 2000);
+          // If we already timed out / turn changed / aborted, don't send a second message
+          if (aiTurnRespondedRef.current) return;
+          aiTurnRespondedRef.current = true;
+
+          const errorMsg = {
+            sender: "bot",
+            text: "(AI error)",
+          };
+          socket.emit("chat message", errorMsg);
+          setMessages((prev) => [...prev, errorMsg]);
+          setPartnerMsgCount((p) => p + 1);
         }
       };
       generateBotResponse();
@@ -448,14 +546,15 @@ function App() {
         }}
       >
         <h1 style={{ margin: 0, textAlign: "center" }}>Doodly Chatbot</h1>
-        {timerActive && (
+        {status === "paired" && !conversationComplete && (
           <div
             style={{
               position: "absolute",
               left: 24,
               top: "50%",
               transform: "translateY(-50%)",
-              background: timeLeft <= 3 ? "#e55" : "#2e8b57",
+              background:
+                showAnyTurnTimer && turnTimeLeft <= 3 ? "#e55" : "#2e8b57",
               color: "#fff",
               borderRadius: 999,
               padding: "4px 14px",
@@ -466,7 +565,7 @@ function App() {
               transition: "background 0.3s",
             }}
           >
-            {timeLeft}s
+            {showAnyTurnTimer ? `turn ${turnTimeLeft}s` : "turn —"} | total {formatMmSs(sessionTimeLeft)}
           </div>
         )}
         <button
