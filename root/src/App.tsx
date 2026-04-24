@@ -94,15 +94,26 @@ function App() {
   >("entry");
   const [firstTurnId, setFirstTurnId] = useState<string | null>(null);
   const [guess, setGuess] = useState<null | "AI" | "Human">(null);
+  const [guessTimedOut, setGuessTimedOut] = useState(false);
   const [showResult, setShowResult] = useState(false);
+  const [partnerGuess, setPartnerGuess] = useState<null | "AI" | "Human">(null);
+  const [partnerGuessTimedOut, setPartnerGuessTimedOut] = useState(false);
+  const [partnerGuessKnown, setPartnerGuessKnown] = useState(false);
   const [truePartnerType, setTruePartnerType] = useState<"AI" | "Human" | null>(
     null,
   );
   const joinTimeout = useRef<number | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
-  const TURN_SECONDS = 20;
-  const SESSION_SECONDS = 240;
+  const TURN_SECONDS = 30;
+  const SESSION_SECONDS = 300;
+  const GUESS_SECONDS = 15;
+
+  const effectivePartnerGuessKnown =
+    truePartnerType === "AI" ? true : partnerGuessKnown;
+  const effectivePartnerGuessTimedOut =
+    truePartnerType === "AI" ? true : partnerGuessTimedOut;
+  const effectivePartnerGuess = truePartnerType === "AI" ? null : partnerGuess;
 
   const conversationComplete = myMsgCount >= 5 && partnerMsgCount >= 5;
   const lastMsg = messages[messages.length - 1];
@@ -204,8 +215,30 @@ function App() {
     setFirstTurnId(botFirstId);
     setTruePartnerType("AI");
 
+    setGuess(null);
+    setGuessTimedOut(false);
+    setShowResult(false);
+    setPartnerGuess(null);
+    setPartnerGuessTimedOut(false);
+    setPartnerGuessKnown(false);
+
     // setRole("Human");
     setAiPersonality(getRandomPersonality());
+  };
+
+  const submitGuess = (nextGuess: "AI" | "Human" | null, timedOut: boolean) => {
+    setGuess(nextGuess);
+    setGuessTimedOut(timedOut);
+    setShowResult(true);
+
+    if (truePartnerType === "Human" && socket.connected) {
+      socket.emit("submit guess", { guess: nextGuess, timedOut });
+    }
+  };
+
+  const handleGuessExpire = () => {
+    if (guess !== null || guessTimedOut) return;
+    submitGuess(null, true);
   };
 
   const joinChat = () => {
@@ -253,10 +286,23 @@ function App() {
     setStatus("entry");
     // setRole(null);
     setGuess(null);
+    setGuessTimedOut(false);
     setShowResult(false);
+    setPartnerGuess(null);
+    setPartnerGuessTimedOut(false);
+    setPartnerGuessKnown(false);
     setTimeout(() => socket.connect(), 100);
     setFirstTurnId(null);
   };
+
+  const guessActive =
+    status === "paired" &&
+    conversationComplete &&
+    !showResult &&
+    guess === null &&
+    !guessTimedOut;
+
+  const guessTimeLeft = useCountdown(guessActive, GUESS_SECONDS, handleGuessExpire);
 
   useEffect(() => {
     socket.on("chat message", (msg: Message) => {
@@ -277,6 +323,13 @@ function App() {
       setPartnerMsgCount(0);
       setFirstTurnId(data?.firstId ?? null);
 
+      setGuess(null);
+      setGuessTimedOut(false);
+      setShowResult(false);
+      setPartnerGuess(null);
+      setPartnerGuessTimedOut(false);
+      setPartnerGuessKnown(false);
+
       const partnerIsAI = data?.partnerType === "AI";
       setTruePartnerType(partnerIsAI ? "AI" : "Human");
 
@@ -291,11 +344,21 @@ function App() {
 
     socket.on("partner disconnected", () => setStatus("disconnected"));
 
+    socket.on(
+      "partner guess",
+      (data: { guess: "AI" | "Human" | null; timedOut: boolean }) => {
+        setPartnerGuessKnown(true);
+        setPartnerGuess(data.guess);
+        setPartnerGuessTimedOut(Boolean(data.timedOut));
+      },
+    );
+
     return () => {
       socket.off("chat message");
       socket.off("waiting");
       socket.off("paired");
       socket.off("partner disconnected");
+      socket.off("partner guess");
       if (joinTimeout.current) clearTimeout(joinTimeout.current);
     };
   }, [truePartnerType]);
@@ -637,17 +700,16 @@ function App() {
             }}
           >
             — Conversation complete —<br />
-            {!guess && !showResult && (
+            {guessActive && (
               <>
                 <div style={{ margin: "16px 0" }}>
-                  Who do you think your partner was?
+                  Who do you think your partner was? ({guessTimeLeft}s)
                 </div>
                 <button
                   className="doodly-send"
                   style={{ margin: 8, fontSize: 18, minWidth: 120 }}
                   onClick={() => {
-                    setGuess("Human");
-                    setShowResult(true);
+                    submitGuess("Human", false);
                   }}
                 >
                   Real Human
@@ -656,17 +718,30 @@ function App() {
                   className="doodly-send"
                   style={{ margin: 8, fontSize: 18, minWidth: 120 }}
                   onClick={() => {
-                    setGuess("AI");
-                    setShowResult(true);
+                    submitGuess("AI", false);
                   }}
                 >
                   AI Bot
                 </button>
               </>
             )}
-            {showResult && guess && (
+
+            {showResult && (guess !== null || guessTimedOut) && (
               <div style={{ margin: "16px 0", fontSize: 20 }}>
-                {truePartnerType && guess === truePartnerType ? (
+                <div style={{ marginBottom: 10, fontSize: 16, color: "#aaa" }}>
+                  You: {guessTimedOut ? "(timed out)" : guess === "AI" ? "AI Bot" : "Real Human"}
+                  <br />
+                  Partner:{" "}
+                  {!effectivePartnerGuessKnown
+                    ? "(choosing...)"
+                    : effectivePartnerGuessTimedOut
+                      ? "(timed out — didn’t choose)"
+                      : effectivePartnerGuess === "AI"
+                        ? "AI Bot"
+                        : "Real Human"}
+                </div>
+
+                {truePartnerType && !guessTimedOut && guess === truePartnerType ? (
                   <span style={{ color: "#2e8b57" }}>
                     ✅ Correct! It was{" "}
                     {truePartnerType === "AI" ? "an AI Bot" : "a Real Human"}.
