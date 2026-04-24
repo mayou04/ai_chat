@@ -1,101 +1,267 @@
 
-body {
-  background: #f7f7f7;
-  font-family: "Comic Sans MS", "Comic Sans", "Chalkboard SE", "Comic Neue", cursive, sans-serif;
-  margin: 0;
-  padding: 0;
-}
-
 .doodly-app {
-  background: #fff;
-  max-width: 420px;
-  margin: 40px auto;
-  border-radius: 24px;
-  box-shadow: 0 4px 24px 0 rgba(80, 80, 80, 0.1), 0 1.5px 0 0 #bbb inset;
-  border: 2.5px dashed #bbb;
   display: flex;
   flex-direction: column;
-  min-height: 600px;
-  height: 80vh;
-  overflow: hidden;
+  height: 100vh;
+  min-height: 0;
+}
+
+/* Entry + waiting full-screen centering */
+.doodly-screen {
+  justify-content: center;
+  align-items: center;
+}
+
+.doodly-screen__inner {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  width: 100%;
+}
+
+.doodly-button-wrapper--col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.doodly-entry-subtitle {
+  color: #888;
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+/* Main chat layout */
+.doodly-app--full {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  min-height: 0;
 }
 
 .doodly-header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  z-index: 2;
   background: #16171d;
-  padding: 16px 0 16px 0;
-  text-align: center;
   border-bottom: 1px solid #eee;
+  padding: 16px 0;
+  text-align: center;
 }
-.doodly-header h1 {
-  font-size: 2.1rem;
-  margin: 0 0 10px 0;
-  letter-spacing: 1.5px;
-  font-weight: 700;
+
+.doodly-header__title {
+  margin: 0;
+  text-align: center;
   color: #fff;
 }
 
+.doodly-timer-badge {
+  position: absolute;
+  left: 24px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: #2e8b57;
+  color: #fff;
+  border-radius: 999px;
+  padding: 4px 14px;
+  font-weight: 700;
+  font-size: 18px;
+  min-width: 48px;
+  text-align: center;
+  transition: background 0.3s;
+}
+
+.doodly-timer-badge--danger {
+  background: #e55;
+}
+
 .doodly-chat {
-  flex: 1 1 auto;
-  padding: 32px 16px 16px 16px;
+  flex: 1;
+  overflow-y: auto;
+  margin-top: 72px;
+  margin-bottom: 90px;
+  padding: 16px;
   display: flex;
   flex-direction: column;
-  gap: 18px;
-  background: #fff;
-  overflow-y: auto;
+  min-height: 0;
 }
 
 .doodly-bubble {
   display: flex;
-  align-items: flex-end;
-  gap: 10px;
-  max-width: 85%;
-  border-radius: 22px;
-  padding: 10px 18px;
-  font-size: 1.08rem;
-  box-shadow: 2px 3px 0 #bbb, 0 1.5px 0 #fff inset;
-  border: 2.5px solid #bbb;
-  background: #fff;
-  position: relative;
-  font-family: inherit;
-  margin-bottom: 2px;
-  min-width: 80px;
+  max-width: 100%;
   word-break: break-word;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  align-items: center;
+  margin: 8px 0;
+  border-radius: 18px;
+  padding: 10px 16px;
 }
+
 .doodly-bubble.me {
   align-self: flex-end;
-  border-style: solid;
-  background: #ededed;
   flex-direction: row-reverse;
+  background: #2e8b57;
+  color: #fff;
 }
+
 .doodly-bubble.partner {
   align-self: flex-start;
-  border-style: dashed;
-  background: #f7f7f7;
+  flex-direction: row;
+  background: #23242a;
+  color: #e0e0e0;
 }
+
+.doodly-avatar {
+  font-size: 24px;
+}
+
+.doodly-bubble.me .doodly-avatar {
+  margin: 0 0 0 8px;
+}
+
+.doodly-bubble.partner .doodly-avatar {
+  margin: 0 8px 0 0;
+}
+
 .doodly-text {
-  font-family: inherit;
-  color: #444;
-  padding-top: 2px;
+  word-break: break-word;
+}
+
+.doodly-center-panel {
+  text-align: center;
+  padding: 16px;
+  color: #888;
+  width: 100%;
+}
+
+.doodly-center-panel--error {
+  color: #e88;
+}
+
+.doodly-guess-question {
+  margin: 16px 0;
+}
+
+.doodly-result {
+  margin: 16px 0;
+  font-size: 20px;
+}
+
+.doodly-result__meta {
+  margin-bottom: 10px;
+  font-size: 16px;
+  color: #aaa;
+}
+
+.doodly-result__correct {
+  color: #2e8b57;
+}
+
+.doodly-result__wrong {
+  color: #e88;
 }
 
 .doodly-footer {
+  position: fixed;
+  left: 0;
+  bottom: 0;
+  width: 100%;
   background: #16171d;
   border-top: 1px solid #eee;
-  padding: 12px 0;
-  text-align: center;
-  flex-shrink: 0;
-  position: relative;
+  z-index: 2;
+  padding: 12px;
   display: flex;
-  justify-content: center;
-  align-items: center;
   gap: 8px;
-}
-.doodly-input {
-  width: 60%;
-  max-width: 260px;
-  margin-right: 8px;
+  align-items: center;
 }
 
+.doodly-input {
+  flex: 1;
+  font-size: 18px;
+  padding: 8px;
+}
+
+.doodly-send {
+  font-size: 18px;
+  padding: 8px 18px;
+}
+
+.doodly-send--start {
+  margin: 12px;
+  font-size: 22px;
+  width: 100%;
+  padding: 14px 32px;
+}
+
+.doodly-send--cancel {
+  margin: 12px;
+}
+
+.doodly-send--quit {
+  position: absolute;
+  right: 24px;
+  top: 25%;
+}
+
+.doodly-send--guess {
+  margin: 8px;
+  min-width: 120px;
+}
+
+.doodly-send[data-variant="send"] {
+  margin-right: 20px;
+}
+
+.doodly-send[data-variant="start-over"] {
+  margin-top: 16px;
+}
+
+.doodly-send[data-variant="restart"] {
+  margin-top: 10px;
+}
+
+/* Waiting screen */
+.doodly-waiting {
+  text-align: center;
+  width: 100%;
+}
+
+.doodly-waiting__section {
+  margin: 32px 0;
+}
+
+.doodly-waiting__stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.doodly-waiting__hint {
+  color: #888;
+  font-size: 18px;
+}
+
+.doodly-spinner {
+  border: 6px solid #eee;
+  border-top: 6px solid #2e8b57;
+  border-radius: 50%;
+  width: 60px;
+  height: 60px;
+  animation: doodly-spin 1s linear infinite;
+  margin-bottom: 16px;
+}
+
+@keyframes doodly-spin {
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+/* Typing dots */
 .typing-dots {
   display: inline-flex;
   align-items: center;

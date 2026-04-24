@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import "./App.css";
 import personalitiesRaw from "./assets/personalities.txt?raw";
 import promptTemplateRaw from "./assets/prompt.txt?raw";
 import { io, Socket } from "socket.io-client";
@@ -518,39 +519,20 @@ function App() {
   if (status === "entry") {
     return (
       <div
-        className="doodly-app"
-        style={{
-          justifyContent: "center",
-          display: "flex",
-          minHeight: "100vh",
-        }}
+        className="doodly-app doodly-screen"
       >
-        <div
-          style={{
-            justifyContent: "center",
-            alignItems: "center",
-            display: "flex",
-            minHeight: "100vh",
-          }}
-        >
+        <div className="doodly-screen__inner">
           <div
-            className="doodly-button-wrapper"
-            style={{ flexDirection: "column", alignItems: "center" }}
+            className="doodly-button-wrapper doodly-button-wrapper--col"
           >
             <h1>Doodly Chatbot</h1>
-            <p style={{ color: "#888", textAlign: "center", marginBottom: 24 }}>
+            <p className="doodly-entry-subtitle">
               Chat with a stranger — human or AI?
               <br />
               You won't know until the end.
             </p>
             <button
-              className="doodly-send"
-              style={{
-                margin: 12,
-                fontSize: 22,
-                width: "100%",
-                padding: "14px 32px",
-              }}
+              className="doodly-send doodly-send--start"
               onClick={joinChat}
             >
               Start Chat
@@ -565,49 +547,23 @@ function App() {
   if (status === "waiting") {
     return (
       <div
-        className="doodly-app"
-        style={{
-          justifyContent: "center",
-          alignItems: "center",
-          display: "flex",
-          minHeight: "100vh",
-        }}
+        className="doodly-app doodly-screen"
       >
-        <div style={{ textAlign: "center", width: "100%" }}>
+        <div className="doodly-waiting">
           <h2>Waiting for a partner to join...</h2>
-          <div style={{ margin: "32px 0" }}>
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-              }}
-            >
-              <div
-                style={{
-                  border: "6px solid #eee",
-                  borderTop: "6px solid #2e8b57",
-                  borderRadius: "50%",
-                  width: 60,
-                  height: 60,
-                  animation: "spin 1s linear infinite",
-                  marginBottom: 16,
-                }}
-              />
-              <span style={{ color: "#888", fontSize: 18 }}>
-                Finding a partner...
-              </span>
+          <div className="doodly-waiting__section">
+            <div className="doodly-waiting__stack">
+              <div className="doodly-spinner" />
+              <span className="doodly-waiting__hint">Finding a partner...</span>
             </div>
           </div>
           <button
-            className="doodly-send"
-            style={{ margin: 12, fontSize: 18 }}
+            className="doodly-send doodly-send--cancel"
             onClick={resetToEntry}
           >
             Cancel
           </button>
         </div>
-        <style>{`@keyframes spin { 100% { transform: rotate(360deg); } }`}</style>
       </div>
     );
   }
@@ -615,52 +571,25 @@ function App() {
   // View: Main Chat
   return (
     <div
-      className="doodly-app"
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        height: "100vh",
-        minHeight: 0,
-      }}
+      className="doodly-app doodly-app--full"
     >
       <header
         className="doodly-header"
-        style={{
-          position: "fixed",
-          top: 0,
-          left: 0,
-          width: "100%",
-          zIndex: 2,
-          background: "#16171d",
-          borderBottom: "1px solid #eee",
-          padding: "16px 0",
-        }}
       >
-        <h1 style={{ margin: 0, textAlign: "center" }}>Doodly Chatbot</h1>
+        <h1 className="doodly-header__title">Doodly Chatbot</h1>
         {status === "paired" && !conversationComplete && (
           <div
-            style={{
-              position: "absolute",
-              left: 24,
-              top: "50%",
-              transform: "translateY(-50%)",
-              background: turnTimeLeft <= 3 ? "#e55" : "#2e8b57",
-              color: "#fff",
-              borderRadius: 999,
-              padding: "4px 14px",
-              fontWeight: 700,
-              fontSize: 18,
-              minWidth: 48,
-              textAlign: "center",
-              transition: "background 0.3s",
-            }}
+            className={
+              turnTimeLeft <= 3
+                ? "doodly-timer-badge doodly-timer-badge--danger"
+                : "doodly-timer-badge"
+            }
           >
             turn {turnTimeLeft}s | total {formatMmSs(sessionTimeLeft)}
           </div>
         )}
         <button
-          className="doodly-send"
-          style={{ position: "absolute", right: 24, top: "25%", fontSize: 18 }}
+          className="doodly-send doodly-send--quit"
           onClick={resetToEntry}
         >
           Quit
@@ -669,16 +598,6 @@ function App() {
 
       <main
         className="doodly-chat"
-        style={{
-          flex: 1,
-          overflowY: "auto",
-          marginTop: 72,
-          marginBottom: 90,
-          padding: 16,
-          display: "flex",
-          flexDirection: "column",
-          minHeight: 0,
-        }}
       >
         {messages.map((msg, idx) => {
           const isMe = msg.sender === (socket.id ?? "player");
@@ -686,28 +605,9 @@ function App() {
             <div
               key={idx}
               className={`doodly-bubble ${isMe ? "me" : "partner"}`}
-              style={{
-                display: "flex",
-                alignSelf: isMe ? "flex-end" : "flex-start",
-                maxWidth: "100%",
-                wordBreak: "break-word",
-                whiteSpace: "pre-wrap",
-                overflowWrap: "break-word",
-                flexDirection: isMe ? "row-reverse" : "row",
-                alignItems: "center",
-                margin: "8px 0",
-                background: isMe ? "#2e8b57" : "#23242a",
-                color: isMe ? "#fff" : "#e0e0e0",
-                borderRadius: 18,
-                padding: "10px 16px",
-              }}
             >
               <span
                 className="doodly-avatar"
-                style={{
-                  fontSize: 24,
-                  margin: isMe ? "0 0 0 8px" : "0 8px 0 0",
-                }}
               >
                 {isMe ? "😁" : "🤖❓"}
               </span>
@@ -718,30 +618,9 @@ function App() {
 
         {status === "paired" && !conversationComplete && !isMyTurn && (
           <div
-            className="doodly-bubble partner"
-            style={{
-              display: "flex",
-              alignSelf: "flex-start",
-              maxWidth: "100%",
-              wordBreak: "break-word",
-              whiteSpace: "pre-wrap",
-              overflowWrap: "break-word",
-              flexDirection: "row",
-              alignItems: "center",
-              margin: "8px 0",
-              background: "#23242a",
-              color: "#e0e0e0",
-              borderRadius: 18,
-              padding: "10px 16px",
-            }}
+            className="doodly-bubble partner doodly-bubble--typing"
           >
-            <span
-              className="doodly-avatar"
-              style={{
-                fontSize: 24,
-                margin: "0 8px 0 0",
-              }}
-            >
+            <span className="doodly-avatar">
               🤖❓
             </span>
             <div className="typing-dots" role="status" aria-label="typing">
@@ -754,23 +633,15 @@ function App() {
         <div ref={chatEndRef} />
 
         {conversationComplete && (
-          <div
-            style={{
-              textAlign: "center",
-              padding: 16,
-              color: "#888",
-              width: "100%",
-            }}
-          >
+          <div className="doodly-center-panel">
             — Conversation complete —<br />
             {guessActive && (
               <>
-                <div style={{ margin: "16px 0" }}>
+                <div className="doodly-guess-question">
                   Who do you think your partner was? ({guessTimeLeft}s)
                 </div>
                 <button
-                  className="doodly-send"
-                  style={{ margin: 8, fontSize: 18, minWidth: 120 }}
+                  className="doodly-send doodly-send--guess"
                   onClick={() => {
                     submitGuess("Human", false);
                   }}
@@ -778,8 +649,7 @@ function App() {
                   Real Human
                 </button>
                 <button
-                  className="doodly-send"
-                  style={{ margin: 8, fontSize: 18, minWidth: 120 }}
+                  className="doodly-send doodly-send--guess"
                   onClick={() => {
                     submitGuess("AI", false);
                   }}
@@ -790,8 +660,8 @@ function App() {
             )}
 
             {showResult && (guess !== null || guessTimedOut) && (
-              <div style={{ margin: "16px 0", fontSize: 20 }}>
-                <div style={{ marginBottom: 10, fontSize: 16, color: "#aaa" }}>
+              <div className="doodly-result">
+                <div className="doodly-result__meta">
                   You: {guessTimedOut ? "(timed out)" : guess === "AI" ? "AI Bot" : "Real Human"}
                   <br />
                   Partner:{" "}
@@ -805,12 +675,12 @@ function App() {
                 </div>
 
                 {truePartnerType && !guessTimedOut && guess === truePartnerType ? (
-                  <span style={{ color: "#2e8b57" }}>
+                  <span className="doodly-result__correct">
                     ✅ Correct! It was{" "}
                     {truePartnerType === "AI" ? "an AI Bot" : "a Real Human"}.
                   </span>
                 ) : (
-                  <span style={{ color: "#e88" }}>
+                  <span className="doodly-result__wrong">
                     ❌ Nope! It was{" "}
                     {truePartnerType === "AI" ? "an AI Bot" : "a Real Human"}.
                   </span>
@@ -818,7 +688,7 @@ function App() {
                 <br />
                 <button
                   className="doodly-send"
-                  style={{ marginTop: 16 }}
+                  data-variant="start-over"
                   onClick={resetToEntry}
                 >
                   Start Over
@@ -829,18 +699,11 @@ function App() {
         )}
 
         {status === "disconnected" && !conversationComplete && (
-          <div
-            style={{
-              textAlign: "center",
-              padding: 16,
-              color: "#e88",
-              width: "100%",
-            }}
-          >
+          <div className="doodly-center-panel doodly-center-panel--error">
             — Your partner disconnected —<br />
             <button
               className="doodly-send"
-              style={{ marginTop: 10 }}
+              data-variant="restart"
               onClick={resetToEntry}
             >
               Restart
@@ -851,19 +714,6 @@ function App() {
 
       <footer
         className="doodly-footer"
-        style={{
-          position: "fixed",
-          left: 0,
-          bottom: 0,
-          width: "100%",
-          background: "#16171d",
-          borderTop: "1px solid #eee",
-          zIndex: 2,
-          padding: 12,
-          display: "flex",
-          gap: 8,
-          alignItems: "center",
-        }}
       >
         <input
           className="doodly-input"
@@ -875,7 +725,6 @@ function App() {
           disabled={
             !canSend || status === "disconnected" || conversationComplete
           }
-          style={{ flex: 1, fontSize: 18, padding: 8 }}
         />
         <button
           className="doodly-send"
@@ -883,7 +732,7 @@ function App() {
           disabled={
             !canSend || status === "disconnected" || conversationComplete
           }
-          style={{ fontSize: 18, padding: "8px 18px", marginRight: "20px" }}
+          data-variant="send"
         >
           Send
         </button>
