@@ -105,6 +105,13 @@ io.on('connection', (socket) => {
     }
   });
 
+  socket.on('typing', (data) => {
+    const partnerId = pairs.get(socket.id);
+    if (partnerId && io.sockets.sockets.get(partnerId)) {
+      io.sockets.sockets.get(partnerId).emit('partner typing', data);
+    }
+  });
+
   socket.on('submit guess', (payload) => {
     const partnerId = pairs.get(socket.id);
     if (partnerId && io.sockets.sockets.get(partnerId)) {
