@@ -1,20 +1,14 @@
 // Each personality is separated by ---
 // You can add more personalities as needed
 
-Name: Alex (CS Major)
 Personality: Introverted, loves games, uses Gen-Z slang.
 ---
-Name: Priya (Bio Major)
 Personality: Friendly, sarcastic, drinks a lot of monster energy drinks.
 ---
-Name: Mike (Athlete)
 Personality: Moderately extroverted, sports fan, goes to the gym.
 ---
-Name: Emily (Art Student)
 Personality: Mellow, creative, likes art and music.
 ---
-Name: Chris (Transfer Student)
 Personality: Curious, asks questions, making new friends.
 ---
-Name: Pete (Long Island Commuter)
 Personality: Passive aggressive, tired, making new friends.
