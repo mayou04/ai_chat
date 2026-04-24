@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import personalitiesRaw from "./assets/personalities.txt?raw";
 import promptTemplateRaw from "./assets/prompt.txt?raw";
 import { io, Socket } from "socket.io-client";
@@ -89,8 +89,6 @@ function App() {
   const [partnerMsgCount, setPartnerMsgCount] = useState(0);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
-  const [partnerTyping, setPartnerTyping] = useState(false);
-  const [aiTyping, setAiTyping] = useState(false);
   const [status, setStatus] = useState<
     "entry" | "waiting" | "paired" | "disconnected"
   >("entry");
@@ -106,8 +104,6 @@ function App() {
   );
   const joinTimeout = useRef<number | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
-  const myTypingRef = useRef(false);
-  const myTypingStopTimeoutRef = useRef<number | null>(null);
 
   const TURN_SECONDS = 30;
   const SESSION_SECONDS = 300;
@@ -134,42 +130,13 @@ function App() {
     isMyTurn &&
     (!lastMsg || lastMsg.sender !== (socket.id ?? "player"));
 
-  const setMyTyping = useCallback(
-    (typing: boolean) => {
-      if (truePartnerType !== "Human") return;
-      if (status !== "paired") return;
-      if (!socket.connected) return;
-      if (myTypingRef.current === typing) return;
-      myTypingRef.current = typing;
-      socket.emit("typing", { typing });
-    },
-    [status, truePartnerType],
-  );
-
-  const bumpMyTyping = useCallback(
-    (nextInput: string) => {
-      if (truePartnerType !== "Human") return;
-      if (status !== "paired") return;
-      if (!canSend) {
-        setMyTyping(false);
-        return;
-      }
-
-      const shouldBeTyping = nextInput.trim().length > 0;
-      setMyTyping(shouldBeTyping);
-
-      if (myTypingStopTimeoutRef.current !== null) {
-        window.clearTimeout(myTypingStopTimeoutRef.current);
-        myTypingStopTimeoutRef.current = null;
-      }
-      if (shouldBeTyping) {
-        myTypingStopTimeoutRef.current = window.setTimeout(() => {
-          setMyTyping(false);
-        }, 1200);
-      }
-    },
-    [canSend, setMyTyping, status, truePartnerType],
-  );
+  const partnerTurnActive =
+    status === "paired" &&
+    truePartnerType === "Human" &&
+    !conversationComplete &&
+    !isMyTurn &&
+    partnerMsgCount < 5 &&
+    (!lastMsg || lastMsg.sender === (socket.id ?? "player"));
 
   const timerActive = status === "paired" && canSend && !conversationComplete;
 
@@ -193,7 +160,6 @@ function App() {
   };
 
   const handleTimerExpire = () => {
-    setMyTyping(false);
     const myMsg = {
       sender: socket.id ?? "player",
       text: "(Timed out)", // send whatever is in the input bar, even if empty
@@ -210,7 +176,6 @@ function App() {
   };
 
   const handleAiTimerExpire = () => {
-    setAiTyping(false);
     if (aiTurnRespondedRef.current) return;
     aiTurnRespondedRef.current = true;
 
@@ -226,8 +191,6 @@ function App() {
   };
 
   const handleSessionExpire = () => {
-    setMyTyping(false);
-    setAiTyping(false);
     if (aiAbortRef.current) {
       aiAbortRef.current.abort();
       aiAbortRef.current = null;
@@ -240,12 +203,27 @@ function App() {
     setInput("");
   };
 
+  const handlePartnerTurnExpire = () => {
+    // No-op: partner client enforces their own timeout.
+  };
+
   const myTurnTimeLeft = useCountdown(timerActive, TURN_SECONDS, handleTimerExpire);
   const aiTurnTimeLeft = useCountdown(aiTurnActive, TURN_SECONDS, handleAiTimerExpire);
+  const partnerTurnTimeLeft = useCountdown(
+    partnerTurnActive,
+    TURN_SECONDS,
+    handlePartnerTurnExpire,
+  );
   const sessionTimeLeft = useCountdown(sessionActive, SESSION_SECONDS, handleSessionExpire);
 
-  const turnTimeLeft = timerActive ? myTurnTimeLeft : aiTurnTimeLeft;
-  const showAnyTurnTimer = timerActive || aiTurnActive;
+  const turnTimeLeft =
+    truePartnerType === "AI"
+      ? isMyTurn
+        ? myTurnTimeLeft
+        : aiTurnTimeLeft
+      : isMyTurn
+        ? myTurnTimeLeft
+        : partnerTurnTimeLeft;
 
   const handleForceAiPairing = () => {
     // Disconnect so the server removes us from the queue
@@ -266,8 +244,6 @@ function App() {
     setPartnerGuess(null);
     setPartnerGuessTimedOut(false);
     setPartnerGuessKnown(false);
-    setPartnerTyping(false);
-    setAiTyping(false);
 
     // setRole("Human");
     setAiPersonality(getRandomPersonality());
@@ -307,7 +283,6 @@ function App() {
 
   const sendMessage = () => {
     if (input.trim() && canSend) {
-      setMyTyping(false);
       const myMsg = { sender: socket.id ?? "player", text: input };
       socket.emit("chat message", myMsg);
 
@@ -326,8 +301,6 @@ function App() {
 
   const resetToEntry = () => {
     if (joinTimeout.current) clearTimeout(joinTimeout.current);
-    setMyTyping(false);
-    setAiTyping(false);
     setMyMsgCount(0);
     setPartnerMsgCount(0);
     socket.disconnect();
@@ -341,7 +314,6 @@ function App() {
     setPartnerGuess(null);
     setPartnerGuessTimedOut(false);
     setPartnerGuessKnown(false);
-    setPartnerTyping(false);
     setTimeout(() => socket.connect(), 100);
     setFirstTurnId(null);
   };
@@ -380,8 +352,6 @@ function App() {
       setPartnerGuess(null);
       setPartnerGuessTimedOut(false);
       setPartnerGuessKnown(false);
-      setPartnerTyping(false);
-      setAiTyping(false);
 
       const partnerIsAI = data?.partnerType === "AI";
       setTruePartnerType(partnerIsAI ? "AI" : "Human");
@@ -396,10 +366,6 @@ function App() {
     });
 
     socket.on("partner disconnected", () => setStatus("disconnected"));
-
-    socket.on("partner typing", (data: { typing: boolean }) => {
-      setPartnerTyping(Boolean(data?.typing));
-    });
 
     socket.on(
       "partner guess",
@@ -416,14 +382,9 @@ function App() {
       socket.off("paired");
       socket.off("partner disconnected");
       socket.off("partner guess");
-      socket.off("partner typing");
       if (joinTimeout.current) clearTimeout(joinTimeout.current);
     };
   }, [truePartnerType]);
-
-  useEffect(() => {
-    if (!canSend) setMyTyping(false);
-  }, [canSend, setMyTyping]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -431,12 +392,11 @@ function App() {
 
   useEffect(() => {
     if (!aiTurnActive) {
-      const t = window.setTimeout(() => setAiTyping(false), 0);
       if (aiAbortRef.current) {
         aiAbortRef.current.abort();
         aiAbortRef.current = null;
       }
-      return () => window.clearTimeout(t);
+      return;
     }
 
     // New AI turn
@@ -457,7 +417,6 @@ function App() {
     ) {
       const generateBotResponse = async () => {
         try {
-          setAiTyping(true);
           const turnNonce = aiTurnNonceRef.current;
           const startedAt = Date.now();
           const controller = aiAbortRef.current ?? new AbortController();
@@ -506,7 +465,6 @@ function App() {
             if (aiTurnNonceRef.current !== turnNonce) return;
             if (aiTurnRespondedRef.current) return;
             aiTurnRespondedRef.current = true;
-            setAiTyping(false);
 
             const botMsg = { sender: "bot", text: botText };
             socket.emit("chat message", botMsg);
@@ -516,7 +474,6 @@ function App() {
           }, delay);
         } catch (err) {
           console.error("AI Generation Error:", err);
-          setAiTyping(false);
           // If we already timed out / turn changed / aborted, don't send a second message
           if (aiTurnRespondedRef.current) return;
           aiTurnRespondedRef.current = true;
@@ -544,7 +501,6 @@ function App() {
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const nextValue = e.target.value;
     setInput(nextValue);
-    bumpMyTyping(nextValue);
   };
 
   // UI Placeholder Logic
@@ -688,8 +644,7 @@ function App() {
               left: 24,
               top: "50%",
               transform: "translateY(-50%)",
-              background:
-                showAnyTurnTimer && turnTimeLeft <= 3 ? "#e55" : "#2e8b57",
+              background: turnTimeLeft <= 3 ? "#e55" : "#2e8b57",
               color: "#fff",
               borderRadius: 999,
               padding: "4px 14px",
@@ -700,7 +655,7 @@ function App() {
               transition: "background 0.3s",
             }}
           >
-            {showAnyTurnTimer ? `turn ${turnTimeLeft}s` : "turn —"} | total {formatMmSs(sessionTimeLeft)}
+            turn {turnTimeLeft}s | total {formatMmSs(sessionTimeLeft)}
           </div>
         )}
         <button
@@ -761,10 +716,7 @@ function App() {
           );
         })}
 
-        {status === "paired" && !conversationComplete && (
-          (truePartnerType === "Human" && partnerTyping) ||
-          (truePartnerType === "AI" && aiTyping)
-        ) && (
+        {status === "paired" && !conversationComplete && !isMyTurn && (
           <div
             className="doodly-bubble partner"
             style={{

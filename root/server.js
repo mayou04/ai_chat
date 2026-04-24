@@ -105,13 +105,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('typing', (data) => {
-    const partnerId = pairs.get(socket.id);
-    if (partnerId && io.sockets.sockets.get(partnerId)) {
-      io.sockets.sockets.get(partnerId).emit('partner typing', data);
-    }
-  });
-
   socket.on('submit guess', (payload) => {
     const partnerId = pairs.get(socket.id);
     if (partnerId && io.sockets.sockets.get(partnerId)) {
@@ -165,7 +158,7 @@ app.post('/api/gemini', async (req, res) => {
         },
       },
       {
-        timeout: 19000,
+        timeout: 29000,
       }
     );
     console.log('[Gemini] Response:', JSON.stringify(geminiRes.data));
