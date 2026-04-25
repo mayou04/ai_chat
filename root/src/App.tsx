@@ -104,11 +104,14 @@ function App() {
     null,
   );
   const joinTimeout = useRef<number | null>(null);
+  const aiMatchTimeout = useRef<number | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   const TURN_SECONDS = 30;
   const SESSION_SECONDS = 300;
   const GUESS_SECONDS = 15;
+  const AI_MATCH_DELAY_MS_MIN = 1500;
+  const AI_MATCH_DELAY_MS_MAX = 3500;
 
   const effectivePartnerGuessKnown =
     truePartnerType === "AI" ? true : partnerGuessKnown;
@@ -238,8 +241,13 @@ function App() {
         ? myTurnTimeLeft
         : partnerTurnTimeLeft;
 
-  const handleForceAiPairing = () => {
-    // Disconnect so the server removes us from the queue
+  const finalizeAiPairingNow = () => {
+    if (joinTimeout.current) clearTimeout(joinTimeout.current);
+    joinTimeout.current = null;
+    if (aiMatchTimeout.current) clearTimeout(aiMatchTimeout.current);
+    aiMatchTimeout.current = null;
+
+    // Disconnect so the server removes us from the queue (and we run locally)
     socket.disconnect();
 
     const isBotFirst = Math.random() > 0.5;
@@ -262,6 +270,28 @@ function App() {
     setAiPersonality(getRandomPersonality());
   };
 
+  const startAiMatchWithDelay = () => {
+    if (joinTimeout.current) clearTimeout(joinTimeout.current);
+    joinTimeout.current = null;
+
+    if (aiMatchTimeout.current) clearTimeout(aiMatchTimeout.current);
+    aiMatchTimeout.current = null;
+
+    // Show waiting UI briefly before switching into AI mode.
+    setStatus("waiting");
+    setAiPersonality(null);
+
+    const delay =
+      AI_MATCH_DELAY_MS_MIN +
+      Math.floor(Math.random() * (AI_MATCH_DELAY_MS_MAX - AI_MATCH_DELAY_MS_MIN + 1));
+
+    const timeoutId = window.setTimeout(() => {
+      if (aiMatchTimeout.current !== timeoutId) return;
+      finalizeAiPairingNow();
+    }, delay);
+    aiMatchTimeout.current = timeoutId;
+  };
+
   const submitGuess = (nextGuess: "AI" | "Human" | null, timedOut: boolean) => {
     setGuess(nextGuess);
     setGuessTimedOut(timedOut);
@@ -278,6 +308,13 @@ function App() {
   };
 
   const joinChat = () => {
+    // True 50/50 behavior: decide up-front whether this session is vs AI or vs Human.
+    const shouldMatchWithAi = Math.random() < 0.5;
+    if (shouldMatchWithAi) {
+      startAiMatchWithDelay();
+      return;
+    }
+
     // setRole("Human");
     setStatus("waiting");
     setAiPersonality(null);
@@ -287,11 +324,15 @@ function App() {
     socket.emit("join chat");
 
     if (joinTimeout.current) clearTimeout(joinTimeout.current);
+    joinTimeout.current = null;
 
-    // Increased wait to 15 seconds
-    joinTimeout.current = window.setTimeout(() => {
-      handleForceAiPairing();
-    }, 15000);
+    // If we can't find a human partner in time, fall back to AI.
+    const timeoutId = window.setTimeout(() => {
+      // If this timeout is no longer the active one, we already paired/canceled.
+      if (joinTimeout.current !== timeoutId) return;
+      startAiMatchWithDelay();
+    }, 30000);
+    joinTimeout.current = timeoutId;
   };
 
   const sendMessage = () => {
@@ -314,6 +355,9 @@ function App() {
 
   const resetToEntry = () => {
     if (joinTimeout.current) clearTimeout(joinTimeout.current);
+    joinTimeout.current = null;
+    if (aiMatchTimeout.current) clearTimeout(aiMatchTimeout.current);
+    aiMatchTimeout.current = null;
     setMyMsgCount(0);
     setPartnerMsgCount(0);
     socket.disconnect();
@@ -357,6 +401,9 @@ function App() {
 
     socket.on("paired", (data) => {
       if (joinTimeout.current) clearTimeout(joinTimeout.current);
+      joinTimeout.current = null;
+      if (aiMatchTimeout.current) clearTimeout(aiMatchTimeout.current);
+      aiMatchTimeout.current = null;
 
       setStatus("paired");
       setMyMsgCount(0);
@@ -400,6 +447,9 @@ function App() {
       socket.off("partner disconnected");
       socket.off("partner guess");
       if (joinTimeout.current) clearTimeout(joinTimeout.current);
+      joinTimeout.current = null;
+      if (aiMatchTimeout.current) clearTimeout(aiMatchTimeout.current);
+      aiMatchTimeout.current = null;
     };
   }, [truePartnerType]);
 
