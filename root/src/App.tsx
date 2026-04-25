@@ -548,11 +548,14 @@ function App() {
       <div className="doodly-app doodly-screen">
         <div className="doodly-screen__inner">
           <div className="doodly-button-wrapper doodly-button-wrapper--col">
-            <h1>Chatbot</h1>
+            <h1>Imitation Game</h1>
             <p className="doodly-entry-subtitle">
-              Chat with a stranger — human or AI?
+              This is a guessing game, try to guess if your partner is a real human
+              or an AI, while trying to not be guessed yourself!
               <br />
-              You won't know until the end.
+              <br />
+              You have 5 messages each, and 5 minutes total. After the
+              conversation, you’ll both guess each other’s identity. Good luck!
             </p>
             <button
               className="doodly-send doodly-send--start"
