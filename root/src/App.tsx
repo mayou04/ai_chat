@@ -208,14 +208,26 @@ function App() {
     // No-op: partner client enforces their own timeout.
   };
 
-  const myTurnTimeLeft = useCountdown(timerActive, TURN_SECONDS, handleTimerExpire);
-  const aiTurnTimeLeft = useCountdown(aiTurnActive, TURN_SECONDS, handleAiTimerExpire);
+  const myTurnTimeLeft = useCountdown(
+    timerActive,
+    TURN_SECONDS,
+    handleTimerExpire,
+  );
+  const aiTurnTimeLeft = useCountdown(
+    aiTurnActive,
+    TURN_SECONDS,
+    handleAiTimerExpire,
+  );
   const partnerTurnTimeLeft = useCountdown(
     partnerTurnActive,
     TURN_SECONDS,
     handlePartnerTurnExpire,
   );
-  const sessionTimeLeft = useCountdown(sessionActive, SESSION_SECONDS, handleSessionExpire);
+  const sessionTimeLeft = useCountdown(
+    sessionActive,
+    SESSION_SECONDS,
+    handleSessionExpire,
+  );
 
   const turnTimeLeft =
     truePartnerType === "AI"
@@ -326,7 +338,11 @@ function App() {
     guess === null &&
     !guessTimedOut;
 
-  const guessTimeLeft = useCountdown(guessActive, GUESS_SECONDS, handleGuessExpire);
+  const guessTimeLeft = useCountdown(
+    guessActive,
+    GUESS_SECONDS,
+    handleGuessExpire,
+  );
 
   useEffect(() => {
     socket.on("chat message", (msg: Message) => {
@@ -428,9 +444,16 @@ function App() {
           }, TURN_SECONDS * 1000);
 
           // Split prompt template into base and first-message instructions
-          const [basePromptRaw, firstMsgRaw = ""] = promptTemplateRaw.split(/\n\s*\n/);
-          const basePrompt = basePromptRaw.replace(/\$\{personality\}/g, aiPersonality.personality);
-          const firstMsg = firstMsgRaw.replace(/\$\{personality\}/g, aiPersonality.personality);
+          const [basePromptRaw, firstMsgRaw = ""] =
+            promptTemplateRaw.split(/\n\s*\n/);
+          const basePrompt = basePromptRaw.replace(
+            /\$\{personality\}/g,
+            aiPersonality.personality,
+          );
+          const firstMsg = firstMsgRaw.replace(
+            /\$\{personality\}/g,
+            aiPersonality.personality,
+          );
 
           let prompt = basePrompt;
           if (messages.length === 0) {
@@ -439,7 +462,8 @@ function App() {
           } else {
             const history = messages
               .map(
-                (m) => `${m.sender === (socket.id ?? "player") ? "Partner" : "AI"}: ${m.text}`
+                (m) =>
+                  `${m.sender === (socket.id ?? "player") ? "Partner" : "AI"}: ${m.text}`,
               )
               .join("\n");
             prompt = `${basePrompt}\n\n${history}\nAI:`;
@@ -453,7 +477,10 @@ function App() {
           });
           const data = await res.json();
           const botText = data.text?.trim() || "(Timed out)";
-          const typingDelay = Math.min(Math.max(botText.length * 40, 500), 8500);
+          const typingDelay = Math.min(
+            Math.max(botText.length * 40, 500),
+            8500,
+          );
 
           const elapsedMs = Date.now() - startedAt;
           const remainingMs = Math.max(0, TURN_SECONDS * 1000 - elapsedMs - 50);
@@ -518,14 +545,10 @@ function App() {
   // View: Entry
   if (status === "entry") {
     return (
-      <div
-        className="doodly-app doodly-screen"
-      >
+      <div className="doodly-app doodly-screen">
         <div className="doodly-screen__inner">
-          <div
-            className="doodly-button-wrapper doodly-button-wrapper--col"
-          >
-            <h1>Doodly Chatbot</h1>
+          <div className="doodly-button-wrapper doodly-button-wrapper--col">
+            <h1>Chatbot</h1>
             <p className="doodly-entry-subtitle">
               Chat with a stranger — human or AI?
               <br />
@@ -546,9 +569,7 @@ function App() {
   // View: Waiting
   if (status === "waiting") {
     return (
-      <div
-        className="doodly-app doodly-screen"
-      >
+      <div className="doodly-app doodly-screen">
         <div className="doodly-waiting">
           <h2>Waiting for a partner to join...</h2>
           <div className="doodly-waiting__section">
@@ -570,35 +591,38 @@ function App() {
 
   // View: Main Chat
   return (
-    <div
-      className="doodly-app doodly-app--full"
-    >
-      <header
-        className="doodly-header"
-      >
-        <h1 className="doodly-header__title">Doodly Chatbot</h1>
-        {status === "paired" && !conversationComplete && (
-          <div
-            className={
-              turnTimeLeft <= 3
-                ? "doodly-timer-badge doodly-timer-badge--danger"
-                : "doodly-timer-badge"
-            }
+    <div className="doodly-app doodly-app--full">
+      <header className="doodly-header">
+        {/* 1. Timer Section */}
+        <div className="doodly-header__side">
+          {status === "paired" && !conversationComplete && (
+            <div
+              className={
+                turnTimeLeft <= 3
+                  ? "doodly-timer-badge doodly-timer-badge--danger"
+                  : "doodly-timer-badge"
+              }
+            >
+              {turnTimeLeft}s | {formatMmSs(sessionTimeLeft)}
+            </div>
+          )}
+        </div>
+
+        {/* 2. Title Section */}
+        <h1 className="doodly-header__title">Chatbot</h1>
+
+        {/* 3. Button Section */}
+        <div className="doodly-header__side doodly-header__side--right">
+          <button
+            className="doodly-send doodly-send--quit"
+            onClick={resetToEntry}
           >
-            turn {turnTimeLeft}s | total {formatMmSs(sessionTimeLeft)}
-          </div>
-        )}
-        <button
-          className="doodly-send doodly-send--quit"
-          onClick={resetToEntry}
-        >
-          Quit
-        </button>
+            Quit
+          </button>
+        </div>
       </header>
 
-      <main
-        className="doodly-chat"
-      >
+      <main className="doodly-chat">
         {messages.map((msg, idx) => {
           const isMe = msg.sender === (socket.id ?? "player");
           return (
@@ -606,23 +630,15 @@ function App() {
               key={idx}
               className={`doodly-bubble ${isMe ? "me" : "partner"}`}
             >
-              <span
-                className="doodly-avatar"
-              >
-                {isMe ? "😁" : "🤖❓"}
-              </span>
+              <span className="doodly-avatar">{isMe ? "😁" : "🤖❓"}</span>
               <div className="doodly-text">{msg.text}</div>
             </div>
           );
         })}
 
         {status === "paired" && !conversationComplete && !isMyTurn && (
-          <div
-            className="doodly-bubble partner doodly-bubble--typing"
-          >
-            <span className="doodly-avatar">
-              🤖❓
-            </span>
+          <div className="doodly-bubble partner doodly-bubble--typing">
+            <span className="doodly-avatar">🤖❓</span>
             <div className="typing-dots" role="status" aria-label="typing">
               <span />
               <span />
@@ -658,11 +674,15 @@ function App() {
                 </button>
               </>
             )}
-
             {showResult && (guess !== null || guessTimedOut) && (
               <div className="doodly-result">
                 <div className="doodly-result__meta">
-                  You: {guessTimedOut ? "(timed out)" : guess === "AI" ? "AI Bot" : "Real Human"}
+                  You:{" "}
+                  {guessTimedOut
+                    ? "(timed out)"
+                    : guess === "AI"
+                      ? "AI Bot"
+                      : "Real Human"}
                   <br />
                   Partner:{" "}
                   {!effectivePartnerGuessKnown
@@ -674,7 +694,9 @@ function App() {
                         : "Real Human"}
                 </div>
 
-                {truePartnerType && !guessTimedOut && guess === truePartnerType ? (
+                {truePartnerType &&
+                !guessTimedOut &&
+                guess === truePartnerType ? (
                   <span className="doodly-result__correct">
                     ✅ Correct! It was{" "}
                     {truePartnerType === "AI" ? "an AI Bot" : "a Real Human"}.
@@ -712,9 +734,7 @@ function App() {
         )}
       </main>
 
-      <footer
-        className="doodly-footer"
-      >
+      <footer className="doodly-footer">
         <input
           className="doodly-input"
           type="text"
