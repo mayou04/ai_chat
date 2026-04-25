@@ -1,4 +1,3 @@
-
 .doodly-app {
   display: flex;
   flex-direction: column;
@@ -48,34 +47,58 @@
   z-index: 2;
   background: #16171d;
   border-bottom: 1px solid #eee;
-  padding: 16px 0;
-  text-align: center;
+  padding: 12px 16px; /* Added horizontal padding */
+
+  /* Flexbox Magic */
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-sizing: border-box;
+}
+
+.doodly-header__side {
+  flex: 1;
+  display: flex;
+  justify-content: flex-start;
+}
+
+.doodly-header__side--right {
+  justify-content: flex-end;
 }
 
 .doodly-header__title {
   margin: 0;
-  text-align: center;
   color: #fff;
+  font-size: 1.2rem; /* Scaled down slightly for mobile */
+  white-space: nowrap;
+  flex: 2; /* Gives the title more priority in the center */
+  text-align: center;
+  padding: 0 16px;
 }
 
 .doodly-timer-badge {
-  position: absolute;
-  left: 24px;
-  top: 50%;
-  transform: translateY(-50%);
+  /* position: absolute; REMOVED */
   background: #2e8b57;
   color: #fff;
   border-radius: 999px;
-  padding: 4px 14px;
+  padding: 4px 10px;
   font-weight: 700;
-  font-size: 18px;
-  min-width: 48px;
-  text-align: center;
-  transition: background 0.3s;
+  font-size: 14px; /* Reduced for mobile stability */
+  white-space: nowrap;
 }
-
 .doodly-timer-badge--danger {
   background: #e55;
+}
+
+@media (max-width: 400px) {
+  .doodly-header__title {
+    font-size: 1rem;
+  }
+  .doodly-timer-badge,
+  .doodly-send--quit {
+    font-size: 12px;
+    padding: 4px 8px;
+  }
 }
 
 .doodly-chat {
@@ -188,6 +211,9 @@
 .doodly-send {
   font-size: 18px;
   padding: 8px 18px;
+  color: black;
+  background-color: lightgrey;
+  border-radius: 90px;
 }
 
 .doodly-send--start {
@@ -195,16 +221,23 @@
   font-size: 22px;
   width: 100%;
   padding: 14px 32px;
+  color: black;
+  background-color: lightgrey;
+  border-radius: 90px;
 }
 
 .doodly-send--cancel {
   margin: 12px;
+  color: black;
+  background-color: lightgrey;
+  border-radius: 90px;
 }
 
 .doodly-send--quit {
-  position: absolute;
-  right: 24px;
-  top: 25%;
+  /* position: absolute; REMOVED */
+  font-size: 14px;
+  padding: 6px 16px;
+  cursor: pointer;
 }
 
 .doodly-send--guess {
