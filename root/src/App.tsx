@@ -110,8 +110,8 @@ function App() {
   const TURN_SECONDS = 30;
   const SESSION_SECONDS = 300;
   const GUESS_SECONDS = 15;
-  const AI_MATCH_DELAY_MS_MIN = 1500;
-  const AI_MATCH_DELAY_MS_MAX = 3500;
+  const AI_MATCH_DELAY_MS_MIN = 5000;
+  const AI_MATCH_DELAY_MS_MAX = 10000;
 
   const effectivePartnerGuessKnown =
     truePartnerType === "AI" ? true : partnerGuessKnown;
