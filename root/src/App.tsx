@@ -493,30 +493,25 @@ function App() {
             controller.abort();
           }, TURN_SECONDS * 1000);
 
-          // Split prompt template into base and first-message instructions
-          const [basePromptRaw, firstMsgRaw = ""] =
-            promptTemplateRaw.split(/\n\s*\n/);
-          const basePrompt = basePromptRaw.replace(
-            /\$\{personality\}/g,
-            aiPersonality.personality,
-          );
-          const firstMsg = firstMsgRaw.replace(
+          // Build prompt from the full template every turn.
+          // The template itself contains the first-message instruction; we just add history when it exists.
+          const template = promptTemplateRaw.replace(
             /\$\{personality\}/g,
             aiPersonality.personality,
           );
 
-          let prompt = basePrompt;
-          if (messages.length === 0) {
-            // Use first-message instructions if no chat history
-            prompt = `${basePrompt}\n\n${firstMsg}`;
-          } else {
+          // Many templates end with a trailing "AI:"; normalize so we can append our own turn marker.
+          const instructions = template.replace(/\s*AI:\s*$/i, "").trimEnd();
+
+          let prompt = `${instructions}\n\nAI:`;
+          if (messages.length > 0) {
             const history = messages
               .map(
                 (m) =>
                   `${m.sender === (socket.id ?? "player") ? "Partner" : "AI"}: ${m.text}`,
               )
               .join("\n");
-            prompt = `${basePrompt}\n\n${history}\nAI:`;
+            prompt = `${instructions}\n\n${history}\nAI:`;
           }
 
           const res = await fetch("/api/gemini", {
