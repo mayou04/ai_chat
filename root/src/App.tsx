@@ -107,7 +107,7 @@ function App() {
   const aiMatchTimeout = useRef<number | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
-  const TURN_SECONDS = 30;
+  const TURN_SECONDS = 20;
   const SESSION_SECONDS = 300;
   const GUESS_SECONDS = 15;
   const AI_MATCH_DELAY_MS_MIN = 5000;
