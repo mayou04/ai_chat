@@ -109,7 +109,7 @@ function App() {
 
   const MESSAGE_LIMIT = 3;
   const TURN_SECONDS = 30;
-  const SESSION_SECONDS = 300;
+  const SESSION_SECONDS = TURN_SECONDS * MESSAGE_LIMIT * 2 + 30; // Add a buffer to the total time limit
   const GUESS_SECONDS = 15;
   const AI_MATCH_DELAY_MS_MIN = 5000;
   const AI_MATCH_DELAY_MS_MAX = 10000;
