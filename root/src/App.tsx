@@ -107,7 +107,8 @@ function App() {
   const aiMatchTimeout = useRef<number | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
-  const TURN_SECONDS = 20;
+  const MESSAGE_LIMIT = 3;
+  const TURN_SECONDS = 30;
   const SESSION_SECONDS = 300;
   const GUESS_SECONDS = 15;
   const AI_MATCH_DELAY_MS_MIN = 5000;
@@ -119,7 +120,8 @@ function App() {
     truePartnerType === "AI" ? true : partnerGuessTimedOut;
   const effectivePartnerGuess = truePartnerType === "AI" ? null : partnerGuess;
 
-  const conversationComplete = myMsgCount >= 5 && partnerMsgCount >= 5;
+  const conversationComplete =
+    myMsgCount >= MESSAGE_LIMIT && partnerMsgCount >= MESSAGE_LIMIT;
   const lastMsg = messages[messages.length - 1];
   const isFirst = firstTurnId === socket.id || firstTurnId === "player";
   const isFirstMessage = myMsgCount === 0 && partnerMsgCount === 0;
@@ -130,7 +132,7 @@ function App() {
 
   const canSend =
     !conversationComplete &&
-    myMsgCount < 5 &&
+    myMsgCount < MESSAGE_LIMIT &&
     isMyTurn &&
     (!lastMsg || lastMsg.sender !== (socket.id ?? "player"));
 
@@ -139,7 +141,7 @@ function App() {
     truePartnerType === "Human" &&
     !conversationComplete &&
     !isMyTurn &&
-    partnerMsgCount < 5 &&
+    partnerMsgCount < MESSAGE_LIMIT &&
     (!lastMsg || lastMsg.sender === (socket.id ?? "player"));
 
   const timerActive = status === "paired" && canSend && !conversationComplete;
@@ -202,8 +204,8 @@ function App() {
 
     const sysMsg = { sender: "system", text: "⏳ Time limit reached" };
     setMessages((prev) => [...prev, sysMsg]);
-    setMyMsgCount(5);
-    setPartnerMsgCount(5);
+    setMyMsgCount(MESSAGE_LIMIT);
+    setPartnerMsgCount(MESSAGE_LIMIT);
     setInput("");
   };
 
@@ -579,7 +581,8 @@ function App() {
   // UI Placeholder Logic
   let inputPlaceholder = "";
   if (conversationComplete) inputPlaceholder = "Conversation complete";
-  else if (myMsgCount >= 5) inputPlaceholder = "Message limit reached";
+  else if (myMsgCount >= MESSAGE_LIMIT)
+    inputPlaceholder = "Message limit reached";
   else if (isFirstMessage) {
     if (firstTurnId === null) inputPlaceholder = "Waiting for pairing...";
     else if (isFirst) inputPlaceholder = "You start! Type your message...";
@@ -599,7 +602,7 @@ function App() {
               or an AI, while trying to not be guessed yourself!
               <br />
               <br />
-              You have 5 messages each, and 5 minutes total. After the
+              You have 3 messages each, and 5 minutes total. After the
               conversation, you’ll both guess each other’s identity. Good luck!
             </p>
             <button

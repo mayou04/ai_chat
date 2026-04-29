@@ -158,7 +158,7 @@ app.post('/api/gemini', async (req, res) => {
         },
       },
       {
-        timeout: 20000,
+        timeout: 29000,
       }
     );
     console.log('[Gemini] Response:', JSON.stringify(geminiRes.data));
