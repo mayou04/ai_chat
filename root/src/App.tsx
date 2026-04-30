@@ -107,11 +107,7 @@ function App() {
   const aiMatchTimeout = useRef<number | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
-<<<<<<< HEAD
   const MESSAGE_LIMIT = 5;
-=======
-  const MESSAGE_LIMIT = 3;
->>>>>>> 9617cbe0e12588e510a2645727ed7e4505951d0e
   const TURN_SECONDS = 30;
   const SESSION_SECONDS = TURN_SECONDS * MESSAGE_LIMIT * 2 + 30; // Add a buffer to the total time limit
   const GUESS_SECONDS = 15;
