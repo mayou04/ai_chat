@@ -1,0 +1,59 @@
+Martin You
+Stony Brook, NY | martin.you04@gmail.com | linkedin.com/in/martin-you04 | github.com/mayou04
+Website: mayou04.github.io
+
+
+EDUCATION
+
+Stony Brook University 	Stony Brook, NY
+B.S. in Computer Science,  Specialization in Security and Privacy	May 2026
+Honors: Dean’s List (4x), Presidential Merit Scholarship	
+Relevant Coursework: Artificial Intelligence, Computer Networks, Offensive Security, Software Security, Web Security
+
+TECHNICAL SKILLS
+
+Programming Languages: C, Java, JavaScript, TypeScript, Python, SQL, HTML/CSS
+Frameworks & Libraries: Express, Node.js, React
+Databases & Cloud: Databricks, Linux, MySQL, JDBC, MongoDB
+DevOps: Apache Tomcat, Azure, Git, GitHub
+Languages: Spanish (Native), Mandarin Chinese (Conversational)
+
+WORK EXPERIENCE
+Stony Brook University Department of IT	Stony Brook, NY
+Lead Student Technologist	Jan. 2025 – Present
+Directed IT support for 25,000+ users across 7,500+ courses, cutting issue resolution times and boosting reliability
+Coordinated with 18 peers and 8 staff to ensure timely support across multi-channel platforms
+Delivered technical workshops to students and faculty, improving adoption of university-supported software
+Front-End Web Developer	Dec. 2024 – Mar. 2025
+Used AI-assisted tools (e.g., GitHub Copilot, ChatGPT) to build a responsive transcription web app
+Collaborating with a team of four to create an AI-powered platform that transcribes and summarizes lectures and meetings
+Designed and implemented a dynamic front-end using HTML, CSS, and JavaScript
+
+AT&T Chief Security Office	Middletown , NJ
+AI Cyber Security Data Analytics Intern	Jun. 2025 – Aug. 2025
+Engineered Retrieval-Augmented Generation (RAG) LLM features for IAM and data introspection in Python
+Optimized deployment cadence from weekly to near real-time by automating workflows on Databricks and Azure
+Developed a novel technique to ingest CSV data dictionary data, allowing for data introspection in the RAG application
+Improved LLM accuracy through prompt engineering, hyperparameter tuning, and few-shot learning
+Automated CSV ingestion and document curation workflows, streamlining data pipelines
+
+PROJECTS
+Academics Management System – Typescript, React, Express, MongoDB	Aug. 2025 – Dec. 2025
+Built a full-stack academic management system supporting course registration and degree requirement tracking
+Implemented role-based permissions, approval pipelines, prerequisite enforcement, waitlists, and capacity management
+Designed parsers and scrapers for YAML, PDF, and web data to populate course catalogs, schedules, and degree requirements
+
+Stock Trading System – Java, JSP, MySQL, JDBC, Tomcat	Feb. 2025 – May 2025
+Developed a stock trading platform with role-based functionality (customer, representative, manager)
+Implemented JDBC connectivity for secure database transactions and dynamic JSP rendering
+Integrated Java Servlets and JSP pages to render dynamic data from the database
+
+Enigma Machine – Python	Sept. 2024
+Developed a replica of the World War II Enigma Machine in Python, simulating its complex encryption and decryption processes
+
+LEADERSHIP
+
+Riot Games Student Association at Stony Brook	
+President	Mar. 2024 – May 2025
+Led weekly meetings with 12+ board members to foster collaboration and strategic planning, creating agendas that support goal-setting and effective team coordination
+Presented and successfully advocated for a 27% budget increase to the Undergraduate Student Government by highlighting event attendance, demonstrating the impact of club activities, and outlining future goals

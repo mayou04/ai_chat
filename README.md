@@ -1,73 +1,108 @@
-# React + TypeScript + Vite
+# Human–AI Identity Guessing Chat (Imitation Game)
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Real-time, turn-based chat game that pairs you with either another user or an LLM bot. After the conversation ends, both sides submit a guess: **Human** or **AI**.
 
-Currently, two official plugins are available:
+## Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- Real-time messaging over Socket.io with pairing + disconnect handling
+- Turn-based chat flow with timers and per-session limits
+- AI opponent powered by Google Gemini (Gemma) via an Express API
+- Prompt templating + randomized “personality” presets
+- Post-chat identity guess collection
 
-## React Compiler
+## Tech Stack
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- Frontend: Vite + React + TypeScript, `socket.io-client`
+- Backend: Node.js + Express + Socket.io
+- AI: Google Gemini API (Gemma model)
 
-## Expanding the ESLint configuration
+## Local Development
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+### Prerequisites
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+- Node.js (recommended: 18+)
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+### Setup
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+All app code lives in `root/`.
+
+1) Install dependencies
+
+```bash
+cd root
+npm install
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+2) Configure environment variables
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+Create `root/.env` (or copy from `root/.env.example`) and set:
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+GEMINI_API_KEY=YOUR_KEY_HERE
 ```
+
+### Run (2 terminals)
+
+Terminal 1 (Socket.io + Express API on port 3001):
+
+```bash
+cd root
+node server.js
+```
+
+Terminal 2 (Vite dev server on port 5173):
+
+```bash
+cd root
+npm run dev
+```
+
+Open the app at the URL printed by Vite (typically `http://localhost:5173`).
+
+## Production Build
+
+```bash
+cd root
+npm run build
+```
+
+Then run the server in production mode so it serves `dist/`:
+
+```bash
+cd root
+set NODE_ENV=production
+node server.js
+```
+
+The server listens on `PORT` (defaults to `3001`).
+
+## How It Works (High Level)
+
+- The frontend initiates a session when you click **Start Chat**.
+- For **human vs. human** sessions, the Socket.io server matches two waiting clients and emits pairing metadata.
+- For **human vs. AI** sessions, the client generates bot responses by calling `POST /api/gemini`.
+- The AI prompt is assembled from:
+	- `root/src/assets/prompt.txt` (template)
+	- `root/src/assets/personalities.txt` (randomized personality blocks)
+
+## Socket Events
+
+Client → Server
+
+- `choose role` — identifies the client role for masking/partner metadata
+- `join chat` — enter the matchmaking queue
+- `chat message` — send a message (server relays and echoes)
+- `submit guess` — submit identity guess after the chat
+
+Server → Client
+
+- `waiting` — queued for a match
+- `paired` — matched with a partner (includes who goes first)
+- `chat message` — delivered messages (including echo)
+- `partner guess` — partner’s submitted guess
+- `partner disconnected` — partner dropped mid-chat
+
+## Configuration Notes
+
+- Vite proxies `/api/*` to the backend server during development (see `root/vite.config.ts`).
+- Chat limits/timers are implemented as constants in `root/src/App.tsx`.
