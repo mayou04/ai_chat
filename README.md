@@ -2,6 +2,9 @@
 
 Real-time, turn-based chat game that pairs you with either another user or an LLM bot. After the conversation ends, both sides submit a guess: **Human** or **AI**.
 
+## Website Hosted
+If this is still up, it's hosted on `https://bot-or-human-cse-312.onrender.com/`
+
 ## Features
 
 - Real-time messaging over Socket.io with pairing + disconnect handling
